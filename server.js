@@ -46,8 +46,7 @@ db.connect((err) => {
             description VARCHAR(255) NOT NULL,
             email VARCHAR(100) NOT NULL,
             startdate DATE NOT NULL,
-            enddate DATE NOT NULL,
-            comment VARCHAR(255) DEFAULT NULL
+            enddate DATE NOT NULL
         )`;
 
     db.query(createTableQuery, (err) => {
@@ -58,6 +57,26 @@ db.connect((err) => {
         }
     });
 });
+
+  // Create the 'activity' table if it does not exist and link it to tasks
+  const createActivityTable = `
+  CREATE TABLE IF NOT EXISTS activity (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      task_id INT NOT NULL,
+      startdate DATE NOT NULL,
+      enddate DATE NOT NULL,
+      email VARCHAR(100) NOT NULL,
+      description VARCHAR(255) NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  )`;
+
+db.query(createActivityTable, (err) => {
+  if (err) {
+      console.error('Error creating activity table:', err);
+  } else {
+      console.log('Activity table is ready and linked to tasks table');
+  }
+}); 
 
 // GET: Fetch all tasks
 app.get('/api/tasks', (req, res) => {
@@ -75,7 +94,7 @@ app.get('/api/tasks/:id/:activity', (req, res) => {
     const { id, activity } = req.params;
 
     // Validate allowed column names
-    const allowedColumns = ['description', 'email', 'startdate', 'enddate', 'comment'];
+    const allowedColumns = ['description', 'email', 'startdate', 'enddate'];
     if (!allowedColumns.includes(activity)) {
         return res.status(400).json({ error: 'Invalid column name' });
     }
@@ -91,6 +110,34 @@ app.get('/api/tasks/:id/:activity', (req, res) => {
         res.json(results[0]);
     });
 });
+
+app.get('/api/activities/:id', (req, res) => {
+    const { id } = req.params;
+    const sql = `
+                SELECT activity.startdate AS activity_startdate, 
+               activity.enddate AS activity_enddate, 
+               activity.email AS activity_email, 
+               activity.description AS activity_description, 
+               tasks.startdate AS task_startdate, 
+               tasks.enddate AS task_enddate, 
+               tasks.email AS task_email, 
+               tasks.description AS task_description
+        FROM activity
+        JOIN tasks ON activity.task_id = tasks.id
+        WHERE activity.id = ?
+   `;
+    
+    db.query(sql, [id], (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Activity not found' });
+        }
+        res.json(results[0]);
+    });
+});
+
 
 
 app.get('/api/tasks/:id', (req, res) => {
@@ -111,15 +158,15 @@ app.get('/api/tasks/:id', (req, res) => {
 
 // POST: Add a new task
 app.post('/api/tasks', (req, res) => {
-    const { description, email, startdate, enddate, comment } = req.body;
+    const { description, email, startdate, enddate } = req.body;
 
     // Validate input data
     if (!description || !email || !startdate || !enddate) {
         return res.status(400).json({ error: 'Description, Email, Start Date, and End Date are required' });
     }
 
-    const sql = 'INSERT INTO tasks (description, email, startdate, enddate, comment) VALUES (?, ?, ?, ?, ?)';
-    db.query(sql, [description, email, startdate, enddate, comment], (err, result) => {
+    const sql = 'INSERT INTO tasks (description, email, startdate, enddate) VALUES (?, ?, ?, ?, ?)';
+    db.query(sql, [description, email, startdate, enddate], (err, result) => {
         if (err) {
             console.error('Error inserting data:', err);
             return res.status(500).json({ error: err.message });
@@ -127,6 +174,8 @@ app.post('/api/tasks', (req, res) => {
         res.json({ message: 'Task added successfully', id: result.insertId });
     });
 });
+
+
 
 // Start the server
 app.listen(p, () => {
