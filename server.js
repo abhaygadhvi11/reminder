@@ -63,8 +63,7 @@ db.connect((err) => {
   CREATE TABLE IF NOT EXISTS activity (
       id INT AUTO_INCREMENT PRIMARY KEY,
       task_id INT NOT NULL,
-      startdate DATE NOT NULL,
-      enddate DATE NOT NULL,
+      date DATE NOT NULL,
       email VARCHAR(100) NOT NULL,
       description VARCHAR(255) NOT NULL,
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
@@ -114,8 +113,8 @@ app.get('/api/tasks/:id/:activity', (req, res) => {
 app.get('/api/activities/:id', (req, res) => {
     const { id } = req.params;
     const sql = `
-                SELECT activity.startdate AS activity_startdate, 
-               activity.enddate AS activity_enddate, 
+                SELECT 
+               activity.date AS activity_date, 
                activity.email AS activity_email, 
                activity.description AS activity_description, 
                tasks.startdate AS task_startdate, 
