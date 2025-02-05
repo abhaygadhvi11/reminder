@@ -113,19 +113,19 @@ app.get('/api/tasks/:id/:activity', (req, res) => {
 app.get('/api/activities/:id', (req, res) => {
     const { id } = req.params;
     const sql = `
-                SELECT 
-               activity.date AS activity_date, 
-               activity.email AS activity_email, 
-               activity.description AS activity_description, 
-               tasks.startdate AS task_startdate, 
-               tasks.enddate AS task_enddate, 
-               tasks.email AS task_email, 
-               tasks.description AS task_description
+        SELECT 
+            activity.date AS activity_date, 
+            activity.email AS activity_email, 
+            activity.description AS activity_description, 
+            tasks.startdate AS task_startdate, 
+            tasks.enddate AS task_enddate, 
+            tasks.email AS task_email, 
+            tasks.description AS task_description
         FROM activity
         JOIN tasks ON activity.task_id = tasks.id
         WHERE activity.id = ?
-   `;
-    
+    `;
+
     db.query(sql, [id], (err, results) => {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -133,9 +133,10 @@ app.get('/api/activities/:id', (req, res) => {
         if (results.length === 0) {
             return res.status(404).json({ error: 'Activity not found' });
         }
-        res.json(results[0]);
+        res.json(results); // Return results as an array
     });
 });
+
 
 
 
@@ -174,7 +175,24 @@ app.post('/api/tasks', (req, res) => {
     });
 });
 
+// POST: Add a new activity
+app.post('/api/activities', (req, res) => {
+    const { task_id, date, email, description } = req.body;
 
+    // Validate input data
+    if (!task_id || !date || !email || !description) {
+        return res.status(400).json({ error: 'Task ID, Date, Email, and Description are required' });
+    }
+
+    const sql = 'INSERT INTO activity (task_id, date, email, description) VALUES (?, ?, ?, ?)';
+    db.query(sql, [task_id, date, email, description], (err, result) => {
+        if (err) {
+            console.error('Error inserting data:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: 'Activity added successfully', id: result.insertId });
+    });
+}); 
 
 // Start the server
 app.listen(p, () => {
