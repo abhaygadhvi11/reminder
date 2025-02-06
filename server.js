@@ -88,11 +88,27 @@ app.get('/api/tasks', (req, res) => {
     });
 });
 
+//GET: Fetch all tasks form a specific id
+app.get('/api/tasks/:id', (req, res) => {
+    const { id } = req.params;
+
+    const sql = 'SELECT * FROM tasks WHERE id = ?';
+    db.query(sql, [id], (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+        res.json(results[0]); 
+    });
+})
+
+
 // GET: Fetch a specific column value by ID
-app.get('/api/tasks/:id/:activity', (req, res) => {
+/*app.get('/api/tasks/:id/:activity', (req, res) => {
     const { id, activity } = req.params;
 
-    // Validate allowed column names
     const allowedColumns = ['description', 'email', 'startdate', 'enddate'];
     if (!allowedColumns.includes(activity)) {
         return res.status(400).json({ error: 'Invalid column name' });
@@ -108,22 +124,25 @@ app.get('/api/tasks/:id/:activity', (req, res) => {
         }
         res.json(results[0]);
     });
-});
+});*/
 
-app.get('/api/activities/:id', (req, res) => {
+//GET: Fetch all activites form a specific id
+app.get('/api/tasks/:id/activites', (req, res) => {
     const { id } = req.params;
     const sql = `
         SELECT 
-            activity.date AS activity_date, 
-            activity.email AS activity_email, 
-            activity.description AS activity_description, 
+            tasks.id AS tasks_id,
             tasks.startdate AS task_startdate, 
             tasks.enddate AS task_enddate, 
             tasks.email AS task_email, 
-            tasks.description AS task_description
-        FROM activity
+            tasks.description AS task_description,
+            activity.id AS activity_id,
+            activity.date AS activity_date, 
+            activity.email AS activity_email, 
+            activity.description AS activity_description
+           FROM activity
         JOIN tasks ON activity.task_id = tasks.id
-        WHERE activity.id = ?
+        WHERE tasks.id = ?   
     `;
 
     db.query(sql, [id], (err, results) => {
@@ -133,28 +152,36 @@ app.get('/api/activities/:id', (req, res) => {
         if (results.length === 0) {
             return res.status(404).json({ error: 'Activity not found' });
         }
-        res.json(results); // Return results as an array
+        res.json(results); 
     });
 });
 
-
-
-
-app.get('/api/tasks/:id', (req, res) => {
-    const { id } = req.params;
-
-    const sql = 'SELECT * FROM tasks WHERE id = ?';
-    db.query(sql, [id], (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+/*app.get('/api/tasks/:id/actvities', (req, res)=> 
+{
+   const  results = {
+    taskid: 1,
+    description: "abc",
+    startdate: "1-2-3",
+    enddate: "1-2-3",
+    email: "a@a",
+    activities: [
+        {
+            activityid: 8,
+            task_id:1, 
+            email:"abc@gmail.com",
+            description:"sdfsdfs",
+            date:"2024-1-12"
+        },
+        {
+            activityid: 11,
+            tasks_id:1,
+            email:"abc@gmail.com",
+            date:"2024-12-12"
         }
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-        res.json(results[0]); // Return the task as an object
-    });
-})
-
+    ]
+   };
+    res.json(results);
+});*/
 
 // POST: Add a new task
 app.post('/api/tasks', (req, res) => {
@@ -165,36 +192,38 @@ app.post('/api/tasks', (req, res) => {
         return res.status(400).json({ error: 'Description, Email, Start Date, and End Date are required' });
     }
 
-    const sql = 'INSERT INTO tasks (description, email, startdate, enddate) VALUES (?, ?, ?, ?, ?)';
+    const sql = 'INSERT INTO tasks (description, email, startdate, enddate) VALUES (?, ?, ?, ?)';
     db.query(sql, [description, email, startdate, enddate], (err, result) => {
         if (err) {
-            console.error('Error inserting data:', err);
+            console.error('Error inserting data:', err);   
             return res.status(500).json({ error: err.message });
         }
         res.json({ message: 'Task added successfully', id: result.insertId });
     });
 });
 
-// POST: Add a new activity
-app.post('/api/activities', (req, res) => {
-    const { task_id, date, email, description } = req.body;
-
-    // Validate input data
-    if (!task_id || !date || !email || !description) {
-        return res.status(400).json({ error: 'Task ID, Date, Email, and Description are required' });
+// POST: Add a new activity  
+app.post('/api/tasks/:id/activites', (req, res) => {
+    const { task_id, activities } = req.body;
+    
+    if (!task_id || !Array.isArray(activities) || activities.length === 0) {
+        return res.status(400).json({ error: 'Task ID and an array of activities are required' });
     }
-
-    const sql = 'INSERT INTO activity (task_id, date, email, description) VALUES (?, ?, ?, ?)';
-    db.query(sql, [task_id, date, email, description], (err, result) => {
+    
+    // Prepare the values array for bulk insert
+    const values = activities.map(({ date, email, description }) => [task_id, date, email, description]);
+    
+    const sql = 'INSERT INTO activity (task_id, date, email, description) VALUES ?';
+    
+    db.query(sql, [values], (err, result) => {   
         if (err) {
             console.error('Error inserting data:', err);
             return res.status(500).json({ error: err.message });
         }
-        res.json({ message: 'Activity added successfully', id: result.insertId });
+        res.json({ message: 'Activities added successfully', affectedRows: result.affectedRows });
     });
-}); 
+});
 
-// Start the server
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
 });
