@@ -62,7 +62,7 @@ db.connect((err) => {
   const createActivityTable = `
   CREATE TABLE IF NOT EXISTS activity (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      task_id INT NOT NULL,
+      tasks_id INT AUTO_INCREMENT,
       date DATE NOT NULL,
       email VARCHAR(100) NOT NULL,
       description VARCHAR(255) NOT NULL,
@@ -89,6 +89,7 @@ app.get('/api/tasks', (req, res) => {
 });
 
 //GET: Fetch all tasks form a specific id
+
 app.get('/api/tasks/:id', (req, res) => {
     const { id } = req.params;
 
@@ -98,7 +99,7 @@ app.get('/api/tasks/:id', (req, res) => {
             return res.status(500).json({ error: err.message });
         }
         if (results.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
+            return res.status(404).json({ error: 'Tasks not found' });
         }
         res.json(results[0]); 
     });
@@ -140,8 +141,8 @@ app.get('/api/tasks/:id/activites', (req, res) => {
             activity.date AS activity_date, 
             activity.email AS activity_email, 
             activity.description AS activity_description
-           FROM activity
-        JOIN tasks ON activity.task_id = tasks.id
+            FROM activity
+        JOIN tasks ON activity.tasks_id = tasks.id
         WHERE tasks.id = ?   
     `;
 
@@ -202,19 +203,19 @@ app.post('/api/tasks', (req, res) => {
     });
 });
 
-// POST: Add a new activity  
-app.post('/api/tasks/:id/activites', (req, res) => {
-    const { task_id, activities } = req.body;
-    
-    if (!task_id || !Array.isArray(activities) || activities.length === 0) {
-        return res.status(400).json({ error: 'Task ID and an array of activities are required' });
+// POST: Add a new activity   
+app.post('/api/tasks/:id/activities', (req, res) => {
+    const { id: tasks_id } = req.params; 
+    const { activities } = req.body; 
+
+    if (!Array.isArray(activities) || activities.length === 0) {
+        return res.status(400).json({ error: 'Array of activities is required' });
     }
-    
-    // Prepare the values array for bulk insert
-    const values = activities.map(({ date, email, description }) => [task_id, date, email, description]);
-    
-    const sql = 'INSERT INTO activity (task_id, date, email, description) VALUES ?';
-    
+
+    const values = activities.map(({ date, email, description }) => [tasks_id, date, email, description]);
+
+    const sql = 'INSERT INTO activity (tasks_id, date, email, description) VALUES ?';
+
     db.query(sql, [values], (err, result) => {   
         if (err) {
             console.error('Error inserting data:', err);
@@ -222,9 +223,10 @@ app.post('/api/tasks/:id/activites', (req, res) => {
         }
         res.json({ message: 'Activities added successfully', affectedRows: result.affectedRows });
     });
-});
+});       
+              
 
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
-});
+});   
 
