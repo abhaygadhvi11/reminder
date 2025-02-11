@@ -128,20 +128,20 @@ app.get('/api/tasks/:id', (req, res) => {
 });*/
 
 //GET: Fetch all activites form a specific id
-app.get('/api/tasks/:id/activites', (req, res) => {
+app.get('/api/tasks/:id/activities', (req, res) => {
     const { id } = req.params;
     const sql = `
         SELECT 
-            tasks.id AS tasks_id,
-            tasks.startdate AS task_startdate, 
-            tasks.enddate AS task_enddate, 
-            tasks.email AS task_email, 
-            tasks.description AS task_description,
-            activity.id AS activity_id,
-            activity.date AS activity_date, 
+            tasks.id AS taskid,
+            tasks.startdate, 
+            tasks.enddate, 
+            tasks.email, 
+            tasks.description,
+            activity.id AS activityid,
+            activity.date, 
             activity.email AS activity_email, 
             activity.description AS activity_description
-            FROM activity
+        FROM activity
         JOIN tasks ON activity.tasks_id = tasks.id
         WHERE tasks.id = ?   
     `;
@@ -151,11 +151,28 @@ app.get('/api/tasks/:id/activites', (req, res) => {
             return res.status(500).json({ error: err.message });
         }
         if (results.length === 0) {
-            return res.status(404).json({ error: 'Activity not found' });
+            return res.status(404).json({ error: 'No activities found for this task' });
         }
-        res.json(results); 
+
+        const task = {
+            taskid: results[0].taskid,
+            description: results[0].description,
+            startdate: results[0].startdate,
+            enddate: results[0].enddate,
+            email: results[0].email,
+            activities: results.map(activity => ({
+                activityid: activity.activityid,
+                task_id: activity.taskid,
+                email: activity.activity_email,
+                description: activity.activity_description || null, 
+                date: activity.date
+            }))
+        };
+
+        res.json(task);
     });
 });
+
 
 /*app.get('/api/tasks/:id/actvities', (req, res)=> 
 {
@@ -203,28 +220,46 @@ app.post('/api/tasks', (req, res) => {
     });
 });
 
-// POST: Add a new activity   
-app.post('/api/tasks/:id/activities', (req, res) => {
-    const { id: tasks_id } = req.params; 
-    const { activities } = req.body; 
+// POST: Add a new activity                                
 
-    if (!Array.isArray(activities) || activities.length === 0) {
-        return res.status(400).json({ error: 'Array of activities is required' });
+app.post('/api/tasks/:id/activities', (req, res) => {             
+    const { id: tasks_id } = req.params; 
+    const { date, email, description } = req.body; 
+
+    if (!date || !email || !description) {
+        return res.status(400).json({ error: 'Date, email, and description are required' });
     }
 
-    const values = activities.map(({ date, email, description }) => [tasks_id, date, email, description]);
+    const sql = 'INSERT INTO activity (tasks_id, date, email, description) VALUES (?, ?, ?, ?)';
 
-    const sql = 'INSERT INTO activity (tasks_id, date, email, description) VALUES ?';
-
-    db.query(sql, [values], (err, result) => {   
+    db.query(sql, [tasks_id, date, email, description], (err, result) => {   
         if (err) {
-            console.error('Error inserting data:', err);
+            console.error('Error inserting data:', err); 
             return res.status(500).json({ error: err.message });
         }
-        res.json({ message: 'Activities added successfully', affectedRows: result.affectedRows });
+        res.json({ message: 'Activity added successfully', insertedId: result.insertId });
     });
 });       
               
+//PUT: Edit an acitvity by :id
+/*app.put('/api/activites/:id',(req,res) =>{
+    const {id} = req.params;
+    const {date,email,description} = req.body;
+
+    if(!date || !email || !description){
+        return res.status(400).json({"date,email and description are requried"});
+    }
+}
+
+const sql= 'UPDATE activity SET date = ?, email = ?, description = ? WHERE id = ?';
+
+db.query(sql,[date,email,description])
+
+)*/
+
+
+
+
 
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
