@@ -79,15 +79,6 @@ db.query(createActivityTable, (err) => {
 }); 
 
 // GET: Fetch all tasks
-/*app.get('/api/tasks', (req, res) => {
-    const sql = 'SELECT * FROM tasks';
-    db.query(sql, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json(results);
-    });
-});*/
 app.get('/api/tasks', (req, res) => {
     const { f } = req.query;            
      
