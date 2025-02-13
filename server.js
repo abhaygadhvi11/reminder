@@ -90,12 +90,12 @@ db.query(createActivityTable, (err) => {
 });*/
 app.get('/api/tasks', (req, res) => {
     const { f } = req.query;            
-
-    let sql = 'SELECT * FROM tasks';
+     
+    let sql = 'SELECT * FROM tasks ORDER BY enddate DESC';
     if (f == 1) {
-        sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
+        sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY ) ORDER BY enddate DESC`;
     } else if (f == 2) {
-        sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY)`;
+        sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY) ORDER BY enddate DESC`;
     } 
 
     db.query(sql, (err, results) => {        
