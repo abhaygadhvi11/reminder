@@ -11,6 +11,7 @@ const p = 4002;
 // Middleware
 //app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));  
 
 const cors = require("cors");
 app.use(cors({
@@ -78,7 +79,7 @@ db.query(createActivityTable, (err) => {
 }); 
 
 // GET: Fetch all tasks
-app.get('/api/tasks', (req, res) => {
+/*app.get('/api/tasks', (req, res) => {
     const sql = 'SELECT * FROM tasks';
     db.query(sql, (err, results) => {
         if (err) {
@@ -86,10 +87,26 @@ app.get('/api/tasks', (req, res) => {
         }
         res.json(results);
     });
-});
+});*/
+app.get('/api/tasks', (req, res) => {
+    const { f } = req.query;            
 
-//GET: Fetch all tasks form a specific id
+    let sql = 'SELECT * FROM tasks';
+    if (f == 1) {
+        sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
+    } else if (f == 2) {
+        sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY)`;
+    } 
 
+    db.query(sql, (err, results) => {        
+        if (err) {        
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(results);      
+    });
+});                    
+
+//GET: Fetch all tasks form a specific id  
 app.get('/api/tasks/:id', (req, res) => {
     const { id } = req.params;
 
@@ -154,7 +171,7 @@ app.get('/api/tasks/:id/activities', (req, res) => {
             return res.status(404).json({ error: 'No activities found for this task' });
         }
 
-        const task = {
+        const result = {
             taskid: results[0].taskid,
             description: results[0].description,
             startdate: results[0].startdate,
@@ -169,9 +186,9 @@ app.get('/api/tasks/:id/activities', (req, res) => {
             }))
         };
 
-        res.json(task);
+        res.json(result);
     });
-});
+});   
 
 
 /*app.get('/api/tasks/:id/actvities', (req, res)=> 
@@ -203,7 +220,7 @@ app.get('/api/tasks/:id/activities', (req, res) => {
 
 // POST: Add a new task
 app.post('/api/tasks', (req, res) => {
-    const { description, email, startdate, enddate } = req.body;
+    const { description, email, startdate, enddate } = req.body;  
 
     // Validate input data
     if (!description || !email || !startdate || !enddate) {
@@ -211,21 +228,20 @@ app.post('/api/tasks', (req, res) => {
     }
 
     const sql = 'INSERT INTO tasks (description, email, startdate, enddate) VALUES (?, ?, ?, ?)';
-    db.query(sql, [description, email, startdate, enddate], (err, result) => {
+    db.query(sql, [description, email, startdate, enddate], (err, result) => { 
         if (err) {
             console.error('Error inserting data:', err);   
             return res.status(500).json({ error: err.message });
         }
         res.json({ message: 'Task added successfully', id: result.insertId });
     });
-});
+});          
 
 // POST: Add a new activity                                
-
 app.post('/api/tasks/:id/activities', (req, res) => {             
     const { id: tasks_id } = req.params; 
-    const { date, email, description } = req.body; 
-
+    const { date, email, description } = req.body;    
+                                                      
     if (!date || !email || !description) {
         return res.status(400).json({ error: 'Date, email, and description are required' });
     }
@@ -235,12 +251,12 @@ app.post('/api/tasks/:id/activities', (req, res) => {
     db.query(sql, [tasks_id, date, email, description], (err, result) => {   
         if (err) {
             console.error('Error inserting data:', err); 
-            return res.status(500).json({ error: err.message });
+            return res.status(500).json({ error: err.message });  
         }
         res.json({ message: 'Activity added successfully', insertedId: result.insertId });
     });
 });       
-              
+           
 //PUT: Edit an acitvity by :id
 /*app.put('/api/activites/:id',(req,res) =>{
     const {id} = req.params;
@@ -256,10 +272,6 @@ const sql= 'UPDATE activity SET date = ?, email = ?, description = ? WHERE id = 
 db.query(sql,[date,email,description])
 
 )*/
-
-
-
-
 
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
