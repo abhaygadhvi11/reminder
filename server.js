@@ -55,7 +55,9 @@ db.connect((err) => {
             description VARCHAR(255) NOT NULL,
             email VARCHAR(100) NOT NULL,
             startdate DATE NOT NULL, 
-            enddate DATE NOT NULL
+            enddate DATE NOT NULL,
+            user_id INT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )`;
 
     db.query(createTableQuery, (err) => {
@@ -91,7 +93,7 @@ const createUsersTable = `
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL
+    password VARCHAR(255) NOT NULL 
 )`;
 
 db.query(createUsersTable, (err) => {
@@ -119,7 +121,7 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-//signup user 
+//POST: signup user 
 // Set fallback for random value generation 
 app.post('/api/signup', async (req, res) => {
     const { email, password } = req.body;
@@ -145,17 +147,17 @@ app.post('/api/signup', async (req, res) => {
         console.error('Error during password hashing:', error);
         res.status(500).json({ error: 'Server error' });
     } 
-});
+});                                                                     
 
-// Login user
+// POST: Login user
 app.post('/api/login', (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const {id, email, password } = req.body;
+    if (!id || !email || !password) {
         return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const sql = 'SELECT * FROM users WHERE email = ?';
-    db.query(sql, [email], async (err, results) => {
+    const sql = 'SELECT * FROM users WHERE id = ? AND email = ?';
+    db.query(sql, [id,email], async (err, results) => {   
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
 
@@ -163,13 +165,13 @@ app.post('/api/login', (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
 
-        const token = jwt.sign({ email: user.email }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ id: user.id,email: user.email }, process.env.JWT_SECRET, { expiresIn: '10h' });
         res.json({ token });
     });
 }); 
 
 // GET: Fetch all tasks
-app.get('/api/tasks' , verifyToken , (req, res) => {
+app.get('/api/tasks' , verifyToken , (req, res) => {  
     const { f } = req.query;            
      
     let sql = 'SELECT * FROM tasks ORDER BY enddate ASC';
@@ -187,9 +189,24 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
     });
 });                    
 
+// GET: Fetch all tasks for a specific user_id
+app.get('/api/tasks/user/:user_id', verifyToken, (req, res) => {
+    const { user_id } = req.params;
 
-+//GET: Fetch all tasks form a specific id  
-app.get('/api/tasks/:id', (req, res) => {
+    const sql = 'SELECT * FROM tasks WHERE user_id = ? ORDER BY enddate ASC';
+    db.query(sql, [user_id], (err, results) => {
+        if (err) {  
+            return res.status(500).json({ error: err.message });
+        }                 
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'No tasks found for this user' });
+        }
+        res.json(results);  
+    });
+});      
+
+//GET: Fetch all tasks form a specific id  
+/*app.get('/api/tasks/:id', (req, res) => {  
     const { id } = req.params;
 
     const sql = 'SELECT * FROM tasks WHERE id = ?';
@@ -202,7 +219,7 @@ app.get('/api/tasks/:id', (req, res) => {
         }
         res.json(results[0]); 
     });
-})
+})*/
 
 
 // GET: Fetch a specific column value by ID
