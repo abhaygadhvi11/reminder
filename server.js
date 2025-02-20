@@ -106,23 +106,26 @@ if (err) {
 
 //token verification 
 const verifyToken = (req, res, next) => {
-    const token = req.header("Authorization");
-   //console.log("Authorization Header:", token); 
-    
-    if (!token) return res.status(401).json({ error: "Access denied" });
+    const token = req.headers['authorization'];
 
-    try {
-        const decoded = jwt.verify(token.split(' ')[1], process.env.JWT_SECRET); 
-        req.user = decoded;
-        next();
-    } catch (err) {
-        console.log(err); 
-        res.status(401).json({ error: "Invalid token" });
+    if (!token) {
+        return res.status(403).json({ error: 'Access denied, no token provided' });
     }
+
+    jwt.verify(token.split(' ')[1], process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
+        req.user = { id: decoded.id, email: decoded.email };
+        next();
+    });
 };
 
+module.exports = verifyToken;   
+
+
 //POST: signup user 
-// Set fallback for random value generation 
 app.post('/api/signup', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -130,8 +133,8 @@ app.post('/api/signup', async (req, res) => {
     }
 
     try {
-        //const salt = await bcrypt.genSalt(10); // Generate salt
-        //const hashedPassword = await bcrypt.hash(password, salt); // Hash password with generated salt
+        //const salt = await bcrypt.genSalt(10);
+        //const hashedPassword = await bcrypt.hash(password, salt); 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const sql = 'INSERT INTO users (email, password) VALUES (?, ?)';
@@ -187,11 +190,11 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
         }
         res.json(results);      
     });
-});                    
- 
-// GET: Fetch all tasks for a specific user_id
-app.get('/api/tasks/user/:user_id', verifyToken, (req, res) => {
-    const { user_id } = req.params;
+});  
+
+//GET: to fetch tasks from a specific user 
+app.get('/api/tasks/user', verifyToken, (req, res) => {
+    const user_id = req.user.id;  // Extracted from the token
 
     const sql = 'SELECT * FROM tasks WHERE user_id = ? ORDER BY enddate ASC';
     db.query(sql, [user_id], (err, results) => {
@@ -203,45 +206,8 @@ app.get('/api/tasks/user/:user_id', verifyToken, (req, res) => {
         }
         res.json(results);  
     });
-});      
+});
 
-//GET: Fetch all tasks form a specific id  
-/*app.get('/api/tasks/:id', (req, res) => {  
-    const { id } = req.params;
-
-    const sql = 'SELECT * FROM tasks WHERE id = ?';
-    db.query(sql, [id], (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Tasks not found' });
-        }
-        res.json(results[0]); 
-    });
-})*/
-
-
-// GET: Fetch a specific column value by ID
-/*app.get('/api/tasks/:id/:activity', (req, res) => {
-    const { id, activity } = req.params;
-
-    const allowedColumns = ['description', 'email', 'startdate', 'enddate'];
-    if (!allowedColumns.includes(activity)) {
-        return res.status(400).json({ error: 'Invalid column name' });
-    }
-
-    const sql = `SELECT ?? FROM tasks WHERE id = ?`;
-    db.query(sql, [activity, id], (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-        res.json(results[0]);
-    });
-});*/
 
 //GET: Fetch all activites form a specific id
 app.get('/api/tasks/:id/activities', (req, res) => { 
@@ -288,34 +254,6 @@ app.get('/api/tasks/:id/activities', (req, res) => {
         res.json(result);
     });
 });   
-
-
-/*app.get('/api/tasks/:id/actvities', (req, res)=> 
-{
-   const  results = {
-    taskid: 1,
-    description: "abc",
-    startdate: "1-2-3",
-    enddate: "1-2-3",
-    email: "a@a",
-    activities: [
-        {
-            activityid: 8,
-            task_id:1, 
-            email:"abc@gmail.com",
-            description:"sdfsdfs",
-            date:"2024-1-12"
-        },
-        {
-            activityid: 11,
-            tasks_id:1,
-            email:"abc@gmail.com",
-            date:"2024-12-12"
-        }
-    ]
-   };
-    res.json(results);
-});*/
 
 // POST: Add a new task
 app.post('/api/tasks', (req, res) => {
