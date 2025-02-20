@@ -151,13 +151,13 @@ app.post('/api/signup', async (req, res) => {
 
 // POST: Login user
 app.post('/api/login', (req, res) => {
-    const {id, email, password } = req.body;
-    if (!id || !email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-    }
+    const {email, password } = req.body;
+    if (!email || !password) {       
+        return res.status(400).json({ error: 'Email and password are required' });     
+    } 
 
-    const sql = 'SELECT * FROM users WHERE id = ? AND email = ?';
-    db.query(sql, [id,email], async (err, results) => {   
+    const sql = 'SELECT * FROM users WHERE email = ?';
+    db.query(sql, [email], async (err, results) => {   
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
 
@@ -172,10 +172,10 @@ app.post('/api/login', (req, res) => {
 
 // GET: Fetch all tasks
 app.get('/api/tasks' , verifyToken , (req, res) => {  
-    const { f } = req.query;            
+    const { f } = req.query;                                  
      
     let sql = 'SELECT * FROM tasks ORDER BY enddate ASC';
-    if (f == 1) {
+    if (f == 1) { 
         sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY ) ORDER BY enddate ASC`;
     } else if (f == 2) {
         sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY) ORDER BY enddate ASC`;
@@ -188,7 +188,7 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
         res.json(results);      
     });
 });                    
-
+ 
 // GET: Fetch all tasks for a specific user_id
 app.get('/api/tasks/user/:user_id', verifyToken, (req, res) => {
     const { user_id } = req.params;
