@@ -200,6 +200,7 @@ app.post('/api/tasks', verifyToken , (req, res) => {
     });
 });
 
+
 //GET: to fetch tasks from a specific user 
 app.get('/api/tasks/user', verifyToken, (req, res) => {
     const user_id = req.user.id; 
@@ -236,11 +237,11 @@ app.get('/api/activities', verifyToken, (req, res) => {
             activity.id AS activityid,
             activity.date,
             activity.email AS activity_email,
-            activity.description AS activity_description
+            activity.description AS activity_description    
         FROM activity
         JOIN tasks ON activity.tasks_id = tasks.id
         WHERE tasks.user_id = ?
-        ORDER BY activity.date ASC
+        ORDER BY activity.date 
     `;
 
     db.query(sql, [user_id], (err, results) => {
