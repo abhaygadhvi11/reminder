@@ -181,6 +181,26 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
     });
 });  
 
+// POST: Add a new task
+app.post('/api/tasks', verifyToken , (req, res) => {
+    const { description, email, startdate, enddate } = req.body;  
+    const user_id = req.user.id; 
+
+    if (!description || !email || !startdate || !enddate) {
+        return res.status(400).json({ error: 'Description, email, Start Date, and End Date are required' });
+    }
+
+    const sql = 'INSERT INTO tasks (description, email, startdate, enddate, user_id) VALUES (?, ?, ?, ?, ?)';
+    db.query(sql, [description, email, startdate, enddate,user_id], (err, result) => { 
+        if (err) {
+            console.error('Error inserting data:', err);   
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: 'Task added successfully', id: result.insertId });
+    });
+});
+
+
 //GET: to fetch tasks from a specific user 
 app.get('/api/tasks/user', verifyToken, (req, res) => {
     const user_id = req.user.id; 
