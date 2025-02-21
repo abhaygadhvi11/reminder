@@ -200,7 +200,6 @@ app.post('/api/tasks', verifyToken , (req, res) => {
     });
 });
 
-
 //GET: to fetch tasks from a specific user 
 app.get('/api/tasks/user', verifyToken, (req, res) => {
     const user_id = req.user.id; 
@@ -241,7 +240,7 @@ app.get('/api/activities', verifyToken, (req, res) => {
         FROM activity
         JOIN tasks ON activity.tasks_id = tasks.id
         WHERE tasks.user_id = ?
-        ORDER BY activity.date DESC
+        ORDER BY activity.date ASC
     `;
 
     db.query(sql, [user_id], (err, results) => {
@@ -253,12 +252,11 @@ app.get('/api/activities', verifyToken, (req, res) => {
             return res.status(404).json({ error: 'No activities found for this user' });
         }
 
-        const tasksArray = [];
-        const taskObj = {};
-
+        const tasksObject = {};
+        
         results.forEach(activity => {
-            if (!taskObj[activity.taskid]) {
-                taskObj[activity.taskid] = {
+            if (!tasksObject[activity.taskid]) {
+                tasksObject[activity.taskid] = {
                     taskid: activity.taskid,
                     description: activity.task_description,
                     startdate: activity.startdate,
@@ -266,10 +264,9 @@ app.get('/api/activities', verifyToken, (req, res) => {
                     email: activity.task_email,
                     activities: []
                 };
-                tasksArray.push(taskObj[activity.taskid]);
             }
 
-            taskObj[activity.taskid].activities.push({
+            tasksObject[activity.taskid].activities.push({
                 activityid: activity.activityid,
                 task_id: activity.taskid,
                 email: activity.activity_email,
@@ -278,7 +275,7 @@ app.get('/api/activities', verifyToken, (req, res) => {
             });
         });
 
-        res.json(tasksArray);
+        res.json(tasksObject);
     });
 });
 
