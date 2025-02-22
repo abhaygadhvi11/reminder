@@ -224,9 +224,8 @@ app.get('/api/tasks/user', verifyToken, (req, res) => {
 });
                   
 //GET: Fetch all activites form a specific id
-app.get('/api/activities/:id', verifyToken, (req, res) => {
+app.get('/api/activities', verifyToken, (req, res) => {
     const user_id = req.user.id;
-    const activity_id = req.params.id;
 
     const sql = `
         SELECT 
@@ -241,46 +240,45 @@ app.get('/api/activities/:id', verifyToken, (req, res) => {
             activity.description AS activity_description    
         FROM activity
         JOIN tasks ON activity.tasks_id = tasks.id
-        WHERE tasks.user_id = ? AND activity.id = ?
+        WHERE tasks.user_id = ?
         ORDER BY activity.date 
     `;
 
-    db.query(sql, [user_id, activity_id], (err, results) => {
+    db.query(sql, [user_id], (err, results) => {
         if (err) {
-            console.error('Error fetching activity:', err);
+            console.error('Error fetching activities:', err);
             return res.status(500).json({ error: 'Server error' });
         }
-
         if (results.length === 0) {
-            return res.status(404).json({ error: 'No activity found for this user with the given ID' });
+            return res.status(404).json({ error: 'No activities found for this user' });
         }
 
-        const activity = results[0]; // Since we fetch only one activity ID, take the first result.
+        const tasksObject = {};
+        
+        results.forEach(activity => {
+            if (!tasksObject[activity.taskid]) {
+                tasksObject[activity.taskid] = {
+                    taskid: activity.taskid,
+                    description: activity.task_description,
+                    startdate: activity.startdate,
+                    enddate: activity.enddate,
+                    email: activity.task_email,
+                    activities: []
+                };
+            }
 
-        const response = {
-            taskid: activity.taskid,
-            description: activity.task_description,
-            startdate: activity.startdate,
-            enddate: activity.enddate,
-            email: activity.task_email,
-            activities: [
-                {
-                    activityid: activity.activityid,
-                    task_id: activity.taskid,
-                    email: activity.activity_email,
-                    description: activity.activity_description || null,
-                    date: activity.date
-                }
-            ]
-        };
+            tasksObject[activity.taskid].activities.push({
+                activityid: activity.activityid,
+                task_id: activity.taskid,
+                email: activity.activity_email,
+                description: activity.activity_description || null,
+                date: activity.date
+            });
+        });
 
-        res.json(response);
+        res.json(tasksObject);
     });
 });
-
-
-
-
 // POST: Add a new activity                                
 app.post('/api/activities', verifyToken, (req, res) => {          
 
