@@ -255,7 +255,9 @@ app.get('/api/activities/:id', verifyToken, (req, res) => {
             return res.status(404).json({ error: 'No activity found for this user with the given ID' });
         }
 
-        const response = results.map(activity => ({
+        const activity = results[0]; // Since we fetch only one activity ID, take the first result.
+
+        const response = {
             taskid: activity.taskid,
             description: activity.task_description,
             startdate: activity.startdate,
@@ -270,11 +272,12 @@ app.get('/api/activities/:id', verifyToken, (req, res) => {
                     date: activity.date
                 }
             ]
-        }));
+        };
 
         res.json(response);
     });
 });
+
 
 
 
