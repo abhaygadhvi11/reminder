@@ -308,14 +308,14 @@ app.post('/api/activities', verifyToken, (req, res) => {
 });
 
 // POST: Assign an activity 
-app.post('/api/assign-activity', verifyToken, (req, res) => {
+app.post('/api/reassign-activity', verifyToken, (req, res) => {
     const { activity_id, new_assigned_email } = req.body;
-    const user_id = req.user.id;
 
     if (!activity_id || !new_assigned_email) {
         return res.status(400).json({ error: 'Activity ID and new assigned email are required' });
     }
 
+    // Check if the activity exists
     const checkActivityQuery = 'SELECT * FROM activity WHERE id = ?';
     db.query(checkActivityQuery, [activity_id], (err, activityResults) => {
         if (err) {
@@ -327,32 +327,20 @@ app.post('/api/assign-activity', verifyToken, (req, res) => {
             return res.status(404).json({ error: 'Activity not found' });
         }
 
-        const task_id = activityResults[0].tasks_id;
-        
-        const checkTaskOwnershipQuery = 'SELECT * FROM tasks WHERE id = ? AND user_id = ?';
-        db.query(checkTaskOwnershipQuery, [task_id, user_id], (err, taskResults) => {
+        // Update the assigned email
+        const updateActivityQuery = 'UPDATE activity SET email = ? WHERE id = ?';
+        db.query(updateActivityQuery, [new_assigned_email, activity_id], (err, result) => {
             if (err) {
-                console.error('Error checking task ownership:', err);  
-                return res.status(500).json({ error: 'Server error' });
+                console.error('Error updating assigned activity:', err);
+                return res.status(500).json({ error: err.message });
             }
-
-            if (taskResults.length === 0) {
-                return res.status(403).json({ error: 'You do not have permission to reassign this activity' });
-            }
-
-            // Update the assigned email
-            const updateActivityQuery = 'UPDATE activity SET email = ? WHERE id = ?';
-            db.query(updateActivityQuery, [new_assigned_email, activity_id], (err, result) => {
-                if (err) {
-                    console.error('Error updating assigned activity:', err);
-                    return res.status(500).json({ error: err.message });
-                }
-                res.json({ message: 'Activity reassigned successfully' });
-            });
+            res.json({ message: 'Activity reassigned successfully' });
         });
     });
 });
-                
+
+
+
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
 });   
