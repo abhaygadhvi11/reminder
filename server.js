@@ -223,76 +223,20 @@ app.get('/api/tasks/user', verifyToken, (req, res) => {
     });
 });
                   
-//GET: Fetch all activites form a specific id
-/*app.get('/api/activities', verifyToken, (req, res) => {
-    const user_id = req.user.id;
-
-    const sql = `
-        SELECT 
-            tasks.id AS taskid,
-            tasks.description AS task_description,
-            tasks.startdate,
-            tasks.enddate,
-            tasks.email AS task_email,
-            activity.id AS activityid,
-            activity.date,
-            activity.email AS activity_email,
-            activity.description AS activity_description    
-        FROM activity
-        JOIN tasks ON activity.tasks_id = tasks.id
-        WHERE tasks.user_id = ?
-        ORDER BY activity.date 
-    `;
-
-    db.query(sql, [user_id], (err, results) => {
-        if (err) {
-            console.error('Error fetching activities:', err);
-            return res.status(500).json({ error: 'Server error' });
-        }
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'No activities found for this user' });
-        }
-
-        const tasksObject = {};
-        
-        results.forEach(activity => {
-            if (!tasksObject[activity.taskid]) {
-                tasksObject[activity.taskid] = {
-                    taskid: activity.taskid,
-                    description: activity.task_description,
-                    startdate: activity.startdate,
-                    enddate: activity.enddate,
-                    email: activity.task_email,
-                    activities: []
-                };
-            }
-
-            tasksObject[activity.taskid].activities.push({
-                activityid: activity.activityid,
-                task_id: activity.taskid,
-                email: activity.activity_email,
-                description: activity.activity_description || null,
-                date: activity.date
-            });
-        });
-
-        res.json(tasksObject);
-    });
-});*/
-
-app.get('/api/activities/:task_id', verifyToken, (req, res) => {
+//GET: Fetch all activites form a specific id                   
+app.get('/api/activities/:task_id', verifyToken, (req, res) => {        
     const user_id = req.user.id;
     const task_id = req.params.task_id;
 
     const sql = `
         SELECT 
-            tasks.id AS taskid,
-            tasks.description AS task_description,
-            tasks.startdate,
+            tasks.id AS taskid, 
+            tasks.description AS task_description,                                                          
+            tasks.startdate,                                                                                          
             tasks.enddate,
             tasks.email AS task_email,
             activity.id AS activityid,
-            activity.date,
+            activity.date,  
             activity.email AS activity_email,
             activity.description AS activity_description    
         FROM activity
@@ -323,22 +267,22 @@ app.get('/api/activities/:task_id', verifyToken, (req, res) => {
                 description: activity.activity_description || null,
                 date: activity.date
             }))
-        };
+        };                                                              
 
         res.json(taskData);
     });
 });
 
 
+// POST: Add a new activity
+app.post('/api/activities', verifyToken, (req, res) => {
+    const { task_id, description } = req.body;
+    const user_id = req.user.id;
+    const email = req.user.email; 
+    const date = new Date();      
 
-// POST: Add a new activity                                
-app.post('/api/activities', verifyToken, (req, res) => {          
-
-    const { task_id, date, email, description } = req.body;    
-    const user_id = req.user.id; 
-
-    if (!task_id || !date || !description) {
-        return res.status(400).json({ error: 'Task ID, Date, and Description are required' });
+    if (!task_id || !description) {
+        return res.status(400).json({ error: 'Task ID and Description are required' });
     }
 
     const checkTaskQuery = 'SELECT * FROM tasks WHERE id = ? AND user_id = ?';
@@ -352,34 +296,63 @@ app.post('/api/activities', verifyToken, (req, res) => {
             return res.status(403).json({ error: 'Task not found or does not belong to the user' });
         }
 
-        const insertActivityQuery = 'INSERT INTO activity (tasks_id, date, email, description) VALUES (?, ?, ?, ?)';
-        db.query(insertActivityQuery, [task_id, date, email, description], (err, result) => {   
+        const insertActivityQuery = 'INSERT INTO activity (tasks_id, date, email, description) VALUES (?, NOW(), ?, ?)';
+        db.query(insertActivityQuery, [task_id, email, description], (err, result) => {
             if (err) {
-                console.error('Error inserting activity:', err); 
-                return res.status(500).json({ error: err.message });  
+                console.error('Error inserting activity:', err);
+                return res.status(500).json({ error: err.message });
             }
             res.json({ message: 'Activity added successfully', insertedId: result.insertId });
         });
     });
 });
 
-           
-//PUT: Edit an acitvity by :id
-/*app.put('/api/activites/:id',(req,res) =>{
-    const {id} = req.params;
-    const {date,email,description} = req.body;
+// POST: Assign an activity 
+app.post('/api/assign-activity', verifyToken, (req, res) => {
+    const { activity_id, new_assigned_email } = req.body;
+    const user_id = req.user.id;
 
-    if(!date || !email || !description){
-        return res.status(400).json({"date,email and description are requried"});
+    if (!activity_id || !new_assigned_email) {
+        return res.status(400).json({ error: 'Activity ID and new assigned email are required' });
     }
-}
 
-const sql= 'UPDATE activity SET date = ?, email = ?, description = ? WHERE id = ?';
+    const checkActivityQuery = 'SELECT * FROM activity WHERE id = ?';
+    db.query(checkActivityQuery, [activity_id], (err, activityResults) => {
+        if (err) {
+            console.error('Error checking activity:', err);
+            return res.status(500).json({ error: 'Server error' });
+        }
 
-db.query(sql,[date,email,description])
+        if (activityResults.length === 0) {
+            return res.status(404).json({ error: 'Activity not found' });
+        }
 
-)*/
+        const task_id = activityResults[0].tasks_id;
+        
+        const checkTaskOwnershipQuery = 'SELECT * FROM tasks WHERE id = ? AND user_id = ?';
+        db.query(checkTaskOwnershipQuery, [task_id, user_id], (err, taskResults) => {
+            if (err) {
+                console.error('Error checking task ownership:', err);  
+                return res.status(500).json({ error: 'Server error' });
+            }
 
+            if (taskResults.length === 0) {
+                return res.status(403).json({ error: 'You do not have permission to reassign this activity' });
+            }
+
+            // Update the assigned email
+            const updateActivityQuery = 'UPDATE activity SET email = ? WHERE id = ?';
+            db.query(updateActivityQuery, [new_assigned_email, activity_id], (err, result) => {
+                if (err) {
+                    console.error('Error updating assigned activity:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+                res.json({ message: 'Activity reassigned successfully' });
+            });
+        });
+    });
+});
+                
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
 });   
