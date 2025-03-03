@@ -212,7 +212,7 @@ app.get('/api/tasks/user', verifyToken, (req, res) => {
     } else if (f == 2) {
         sql = `SELECT * FROM tasks WHERE user_id = ? AND enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY) ORDER BY enddate ASC`;
     } 
-    db.query(sql, [user_id], (err, results) => {
+    db.query(sql, [user_id], (err, results) => {    
         if (err) {  
             return res.status(500).json({ error: err.message });
         }                 
@@ -273,7 +273,6 @@ app.get('/api/activities/:task_id', verifyToken, (req, res) => {
     });
 });
 
-
 // POST: Add a new activity
 app.post('/api/activities', verifyToken, (req, res) => {
     const { task_id, description } = req.body;
@@ -307,38 +306,83 @@ app.post('/api/activities', verifyToken, (req, res) => {
     });
 });
 
-// POST: Assign an activity 
-app.post('/api/reassign-activity', verifyToken, (req, res) => {
-    const { activity_id, new_assigned_email } = req.body;
+//POST: assigning task to another user
+app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
+    const { assigned_to_email } = req.body;
+    const taskId = req.params.taskId;
 
-    if (!activity_id || !new_assigned_email) {
-        return res.status(400).json({ error: 'Activity ID and new assigned email are required' });
+    if (!assigned_to_email) {
+        return res.status(400).json({ error: 'Assigned_to_email is required' });
     }
 
-    // Check if the activity exists
-    const checkActivityQuery = 'SELECT * FROM activity WHERE id = ?';
-    db.query(checkActivityQuery, [activity_id], (err, activityResults) => {
+    // Check if the task exists
+    const taskQuery = 'SELECT * FROM tasks WHERE id = ?';
+    db.query(taskQuery, [taskId], (err, taskResults) => {       
         if (err) {
-            console.error('Error checking activity:', err);
+            console.error('Error fetching task:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (taskResults.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        // Find the user_id of the assigned user
+        const userQuery = 'SELECT id FROM users WHERE email = ?';
+        db.query(userQuery, [assigned_to_email], (err, userResults) => {
+            if (err) {
+                console.error('Error fetching user:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            if (userResults.length === 0) {
+                return res.status(404).json({ error: 'Assigned user not found' });
+            }
+
+            const assigned_to_id = userResults[0].id;
+
+            // Update the task with the new assigned user
+            const updateQuery = 'UPDATE tasks SET assigned_to = ? WHERE id = ?';
+            db.query(updateQuery, [assigned_to_id, taskId], (err, result) => {
+                if (err) {
+                    console.error('Error updating task:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+                res.json({ message: 'Task assigned successfully', taskId });
+            });
+        });
+    });
+});
+
+// POST: Reassign an activity without changing previous data
+app.post('/api/reassign-activity', verifyToken, (req, res) => {  
+    const { tasks_id, new_assigned_email } = req.body;
+
+    if (!tasks_id || !new_assigned_email) {
+        return res.status(400).json({ error: 'Task ID and new assigned email are required' });
+    }
+
+    // Check if the task exists
+    const checkActivityQuery = 'SELECT id FROM activity WHERE id = ?'; 
+    db.query(checkActivityQuery, [tasks_id], (err, activityResults) => {
+        if (err) {
+            console.error('Error checking activity:', err);                  
             return res.status(500).json({ error: 'Server error' });
         }
 
         if (activityResults.length === 0) {
-            return res.status(404).json({ error: 'Activity not found' });
+            return res.status(404).json({ error: 'Activity not found' });          
         }
 
-        // Update the assigned email
-        const updateActivityQuery = 'UPDATE activity SET email = ? WHERE id = ?';
-        db.query(updateActivityQuery, [new_assigned_email, activity_id], (err, result) => {
+        // Update only the 'assigned_to' column
+        const updateAssignedQuery = 'UPDATE activity SET assigned_to = ? WHERE id = ?';
+        db.query(updateAssignedQuery, [new_assigned_email, tasks_id], (err, result) => {
             if (err) {
-                console.error('Error updating assigned activity:', err);
+                console.error('Error updating assigned user:', err);
                 return res.status(500).json({ error: err.message });
             }
             res.json({ message: 'Activity reassigned successfully' });
         });
     });
 });
-
 
 
 app.listen(p, () => {
