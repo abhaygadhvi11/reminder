@@ -306,7 +306,7 @@ app.post('/api/activities', verifyToken, (req, res) => {
     });
 });
 
-//POST: assigning task to another user
+// POST: Assign task to a user using email instead of user ID
 app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
     const { assigned_to_email } = req.body;
     const taskId = req.params.taskId;
@@ -317,7 +317,7 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
 
     // Check if the task exists
     const taskQuery = 'SELECT * FROM tasks WHERE id = ?';
-    db.query(taskQuery, [taskId], (err, taskResults) => {       
+    db.query(taskQuery, [taskId], (err, taskResults) => {
         if (err) {
             console.error('Error fetching task:', err);
             return res.status(500).json({ error: 'Database error' });
@@ -326,8 +326,8 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
             return res.status(404).json({ error: 'Task not found' });
         }
 
-        // Find the user_id of the assigned user
-        const userQuery = 'SELECT id FROM users WHERE email = ?';
+        // Check if the assigned email exists in the users table
+        const userQuery = 'SELECT email FROM users WHERE email = ?';
         db.query(userQuery, [assigned_to_email], (err, userResults) => {
             if (err) {
                 console.error('Error fetching user:', err);
@@ -337,22 +337,21 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
                 return res.status(404).json({ error: 'Assigned user not found' });
             }
 
-            const assigned_to_id = userResults[0].id;
-
-            // Update the task with the new assigned user
-            const updateQuery = 'UPDATE tasks SET assigned_to = ? WHERE id = ?';
-            db.query(updateQuery, [assigned_to_id, taskId], (err, result) => {
+            // Update the task with the assigned email
+            const updateQuery = 'UPDATE tasks SET assigned_to_email = ? WHERE id = ?';
+            db.query(updateQuery, [assigned_to_email, taskId], (err, result) => {
                 if (err) {
                     console.error('Error updating task:', err);
                     return res.status(500).json({ error: err.message });
                 }
-                res.json({ message: 'Task assigned successfully', taskId });
+                res.json({ message: 'Task assigned successfully', assigned_to_email });
             });
         });
     });
 });
 
-// POST: Reassign an activity without changing previous data
+
+// POST: Reassign an activity 
 app.post('/api/reassign-activity', verifyToken, (req, res) => {  
     const { tasks_id, new_assigned_email } = req.body;
 
@@ -371,8 +370,7 @@ app.post('/api/reassign-activity', verifyToken, (req, res) => {
         if (activityResults.length === 0) {
             return res.status(404).json({ error: 'Activity not found' });          
         }
-
-        // Update only the 'assigned_to' column
+        
         const updateAssignedQuery = 'UPDATE activity SET assigned_to = ? WHERE id = ?';
         db.query(updateAssignedQuery, [new_assigned_email, tasks_id], (err, result) => {
             if (err) {
