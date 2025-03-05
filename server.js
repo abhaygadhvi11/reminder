@@ -256,8 +256,9 @@ app.get('/api/activities/:task_id', verifyToken, (req, res) => {
             tasks.startdate,                                                                                          
             tasks.enddate,
             tasks.email AS task_email,
+            tasks.assigned_to_email AS task_assigned_to_email,
             activity.id AS activityid,
-            activity.date,  
+            activity.date,      
             activity.email AS activity_email,
             activity.description AS activity_description    
         FROM activity
@@ -266,7 +267,7 @@ app.get('/api/activities/:task_id', verifyToken, (req, res) => {
         ORDER BY activity.date 
     `;
 
-    db.query(sql, [user_id, task_id,user_email], (err, results) => {
+    db.query(sql, [user_id, task_id, user_email], (err, results) => {
         if (err) {
             console.error('Error fetching activities:', err);
             return res.status(500).json({ error: 'Server error' });
