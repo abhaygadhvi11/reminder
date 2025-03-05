@@ -247,6 +247,7 @@ app.get('/api/tasks/user', verifyToken, (req, res) => {
 app.get('/api/activities/:task_id', verifyToken, (req, res) => {        
     const user_id = req.user.id;
     const task_id = req.params.task_id;
+    const user_email = req.user.email; 
 
     const sql = `
         SELECT 
@@ -261,11 +262,11 @@ app.get('/api/activities/:task_id', verifyToken, (req, res) => {
             activity.description AS activity_description    
         FROM activity
         JOIN tasks ON activity.tasks_id = tasks.id
-        WHERE tasks.user_id = ? AND tasks.id = ?
+        WHERE tasks.user_id = ? AND tasks.id = ? AND assigned_to_email = ?
         ORDER BY activity.date 
     `;
 
-    db.query(sql, [user_id, task_id], (err, results) => {
+    db.query(sql, [user_id, task_id,user_email], (err, results) => {
         if (err) {
             console.error('Error fetching activities:', err);
             return res.status(500).json({ error: 'Server error' });
@@ -280,6 +281,7 @@ app.get('/api/activities/:task_id', verifyToken, (req, res) => {
             startdate: results[0]?.startdate || null,
             enddate: results[0]?.enddate || null,
             email: results[0]?.task_email || null,
+            assigned_to_email: results[0]?.task_assigned_to_email || null,
             activities: results.map(activity => ({
                 activityid: activity.activityid,
                 task_id: activity.taskid,
