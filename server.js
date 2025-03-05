@@ -204,15 +204,34 @@ app.post('/api/tasks', verifyToken , (req, res) => {
 //GET: to fetch tasks from a specific user 
 app.get('/api/tasks/user', verifyToken, (req, res) => {
     const user_id = req.user.id; 
+    const user_email = req.user.email; 
     const { f } = req.query; 
 
-    let sql = 'SELECT * FROM tasks WHERE user_id = ? ORDER BY enddate ASC';
+    let sql = `
+        SELECT * FROM tasks 
+        WHERE user_id = ? OR assigned_to_email = ? 
+        ORDER BY enddate ASC
+    `;
+
     if (f == 1) { 
-        sql = `SELECT * FROM tasks WHERE user_id = ? AND enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY ) ORDER BY enddate ASC`;
+        sql = `
+            SELECT * FROM tasks 
+            WHERE (user_id = ? OR assigned_to_email = ?) 
+            AND enddate >= CURDATE() 
+            AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY ) 
+            ORDER BY enddate ASC
+        `;
     } else if (f == 2) {
-        sql = `SELECT * FROM tasks WHERE user_id = ? AND enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY) ORDER BY enddate ASC`;
-    } 
-    db.query(sql, [user_id], (err, results) => {    
+        sql = `
+            SELECT * FROM tasks 
+            WHERE (user_id = ? OR assigned_to_email = ?) 
+            AND enddate >= CURDATE() 
+            AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY) 
+            ORDER BY enddate ASC
+        `;
+    }
+
+    db.query(sql, [user_id, user_email], (err, results) => {    
         if (err) {  
             return res.status(500).json({ error: err.message });
         }                 
@@ -222,6 +241,7 @@ app.get('/api/tasks/user', verifyToken, (req, res) => {
         res.json(results);  
     });
 });
+
                   
 //GET: Fetch all activites form a specific id                   
 app.get('/api/activities/:task_id', verifyToken, (req, res) => {        
