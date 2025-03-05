@@ -242,12 +242,64 @@ app.get('/api/tasks/user', verifyToken, (req, res) => {
     });
 });
 
-                  
-//GET: Fetch all activites form a specific id                   
-app.get('/api/activities/:task_id', verifyToken, (req, res) => {        
+                  //GET: Fetch all activites form a specific id                   
+   /* app.get('/api/activities/:task_id', verifyToken, (req, res) => {        
+        const user_id = req.user.id;
+        const task_id = req.params.task_id;
+        const user_email = req.user.email; 
+
+        const sql = `
+            SELECT 
+                tasks.id AS taskid, 
+                tasks.description AS task_description,                                                          
+                tasks.startdate,                                                                                          
+                tasks.enddate,
+                tasks.email AS task_email,
+                tasks.assigned_to_email AS task_assigned_to_email,
+                activity.id AS activityid,
+                activity.date,      
+                activity.email AS activity_email,
+                activity.description AS activity_description    
+            FROM activity
+            JOIN tasks ON activity.tasks_id = tasks.id
+            WHERE tasks.user_id = ? AND tasks.id = ? AND assigned_to_email = ?
+            ORDER BY activity.date 
+        `;
+
+        db.query(sql, [user_id, task_id, user_email], (err, results) => {
+            if (err) {
+                console.error('Error fetching activities:', err);
+                return res.status(500).json({ error: 'Server error' });
+            }
+            if (results.length === 0) {
+                return res.status(404).json({ error: 'No activities found for this task' });
+            }
+
+            const taskData = {
+                taskid: task_id,
+                description: results[0]?.task_description || null,
+                startdate: results[0]?.startdate || null,
+                enddate: results[0]?.enddate || null,
+                email: results[0]?.task_email || null,
+                assigned_to_email: results[0]?.task_assigned_to_email || null,
+                activities: results.map(activity => ({
+                    activityid: activity.activityid,
+                    task_id: activity.taskid,
+                    email: activity.activity_email,
+                    description: activity.activity_description || null,
+                    date: activity.date
+                }))
+            };                                                              
+
+            res.json(taskData);
+        });
+    });*/
+
+// GET: Fetch all activities for a specific task, including assigned tasks
+app.get('/api/activities/:task_id', verifyToken, (req, res) => {
     const user_id = req.user.id;
     const task_id = req.params.task_id;
-    const user_email = req.user.email; 
+    const user_email = req.user.email;
 
     const sql = `
         SELECT 
@@ -263,11 +315,12 @@ app.get('/api/activities/:task_id', verifyToken, (req, res) => {
             activity.description AS activity_description    
         FROM activity
         JOIN tasks ON activity.tasks_id = tasks.id
-        WHERE tasks.user_id = ? AND tasks.id = ? AND assigned_to_email = ?
-        ORDER BY activity.date 
+        WHERE (tasks.user_id = ? OR tasks.assigned_to_email = ?) 
+        AND tasks.id = ?
+        ORDER BY activity.date
     `;
 
-    db.query(sql, [user_id, task_id, user_email], (err, results) => {
+    db.query(sql, [user_id, user_email, task_id], (err, results) => {
         if (err) {
             console.error('Error fetching activities:', err);
             return res.status(500).json({ error: 'Server error' });
@@ -290,11 +343,12 @@ app.get('/api/activities/:task_id', verifyToken, (req, res) => {
                 description: activity.activity_description || null,
                 date: activity.date
             }))
-        };                                                              
+        };
 
         res.json(taskData);
     });
 });
+
 
 // POST: Add a new activity
 app.post('/api/activities', verifyToken, (req, res) => {
