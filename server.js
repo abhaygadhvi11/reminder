@@ -243,6 +243,86 @@ app.get('/api/tasks/user', verifyToken, (req, res) => {
     });
 });
 
+// GET: Fetch tasks created by the user
+app.get('/api/tasks/created', verifyToken, (req, res) => {
+    const user_id = req.user.id;
+    const { f } = req.query; 
+
+    let sql = `
+        SELECT * FROM tasks 
+        WHERE user_id = ? 
+        ORDER BY enddate ASC
+    `;
+
+    if (f == 1) { 
+        sql = `
+            SELECT * FROM tasks 
+            WHERE user_id = ? 
+            AND enddate >= CURDATE() 
+            AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) 
+            ORDER BY enddate ASC
+        `;
+    } else if (f == 2) {
+        sql = `
+            SELECT * FROM tasks 
+            WHERE user_id = ? 
+            AND enddate >= CURDATE() 
+            AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY) 
+            ORDER BY enddate ASC
+        `;
+    }
+
+    db.query(sql, [user_id], (err, results) => {    
+        if (err) {  
+            return res.status(500).json({ error: err.message });
+        }                  
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'No tasks created by this user' });
+        }
+        res.json(results);  
+    });
+});
+
+// GET: Fetch tasks assigned to the user
+app.get('/api/tasks/assigned', verifyToken, (req, res) => {
+    const user_id = req.user.id;
+    const user_email = req.user.email;
+    const { f } = req.query; 
+
+    let sql = `
+        SELECT * FROM tasks 
+        WHERE assigned_to_user_id = ? OR assigned_to_email = ? 
+        ORDER BY enddate ASC
+    `;
+
+    if (f == 1) { 
+        sql = `
+            SELECT * FROM tasks 
+            WHERE (assigned_to_user_id = ? OR assigned_to_email = ?) 
+            AND enddate >= CURDATE() 
+            AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) 
+            ORDER BY enddate ASC
+        `;
+    } else if (f == 2) {
+        sql = `
+            SELECT * FROM tasks 
+            WHERE (assigned_to_user_id = ? OR assigned_to_email = ?) 
+            AND enddate >= CURDATE() 
+            AND enddate <= DATE_ADD(CURDATE(), INTERVAL 31 DAY) 
+            ORDER BY enddate ASC
+        `;
+    }
+
+    db.query(sql, [user_id, user_email], (err, results) => {    
+        if (err) {  
+            return res.status(500).json({ error: err.message });
+        }                  
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'No tasks assigned to this user' });
+        }
+        res.json(results);  
+    });
+});
 
 // GET: Fetch all activities for a specific task, including assigned tasks
 app.get('/api/tasks/:task_id/activities', verifyToken, (req, res) => {
@@ -298,7 +378,6 @@ app.get('/api/tasks/:task_id/activities', verifyToken, (req, res) => {
     });
 });
 
-
 // POST: Add a new activity
 app.post('/api/activities', verifyToken, (req, res) => {
     const { task_id, description } = req.body;
@@ -310,15 +389,17 @@ app.post('/api/activities', verifyToken, (req, res) => {
         return res.status(400).json({ error: 'Task ID and Description are required' });
     }
 
-    const checkTaskQuery = 'SELECT * FROM tasks WHERE id = ? AND user_id = ?';
-    db.query(checkTaskQuery, [task_id, user_id], (err, taskResults) => {
+    const checkTaskQuery = `SELECT * FROM tasks  WHERE id = ? 
+        AND (user_id = ? OR assigned_to_user_id = ? OR assigned_to_email = ?)`;
+
+    db.query(checkTaskQuery, [task_id, user_id, user_id, email], (err, taskResults) => {
         if (err) {
             console.error('Error checking task:', err);
             return res.status(500).json({ error: 'Server error' });
         }
 
         if (taskResults.length === 0) {
-            return res.status(403).json({ error: 'Task not found or does not belong to the user' });
+            return res.status(403).json({ error: 'Task not found or you are not authorized to add an activity' });
         }
 
         const insertActivityQuery = 'INSERT INTO activity (tasks_id, date, email, description) VALUES (?, NOW(), ?, ?)';
@@ -331,6 +412,7 @@ app.post('/api/activities', verifyToken, (req, res) => {
         });
     });
 });
+
 
 // POST: Assign task to a user using email and update assigned_to_user_id & assigned_to_email
 app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
@@ -381,39 +463,6 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
         });
     });
 });
-
-
-// POST: Reassign an activity 
-/*app.post('/api/reassign-activity', verifyToken, (req, res) => {  
-    const { tasks_id, new_assigned_email } = req.body;
-
-    if (!tasks_id || !new_assigned_email) {
-        return res.status(400).json({ error: 'Task ID and new assigned email are required' });
-    }
-
-    // Check if the task exists
-    const checkActivityQuery = 'SELECT id FROM activity WHERE id = ?'; 
-    db.query(checkActivityQuery, [tasks_id], (err, activityResults) => {
-        if (err) {
-            console.error('Error checking activity:', err);                  
-            return res.status(500).json({ error: 'Server error' });
-        }
-
-        if (activityResults.length === 0) {
-            return res.status(404).json({ error: 'Activity not found' });          
-        }
-        
-        const updateAssignedQuery = 'UPDATE activity SET assigned_to = ? WHERE id = ?';
-        db.query(updateAssignedQuery, [new_assigned_email, tasks_id], (err, result) => {
-            if (err) {
-                console.error('Error updating assigned user:', err);
-                return res.status(500).json({ error: err.message });
-            }
-            res.json({ message: 'Activity reassigned successfully' });
-        });
-    });
-});*/ 
-
 
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
