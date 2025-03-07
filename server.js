@@ -536,6 +536,46 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
     });
 });*/
 
+// POST: Mark a task as done (Only creator or assigned user can mark as done)
+app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
+    const taskId = req.params.taskId;
+    const userId = req.user.id; // Assuming user ID is available from verifyToken
+    const userEmail = req.user.email; // Assuming user email is available from verifyToken
+
+    // Fetch task details, including creator and assigned user
+    const taskQuery = 'SELECT email, assigned_to_user_id, assigned_to_email, status FROM tasks WHERE id = ?';
+    db.query(taskQuery, [taskId], (err, taskResults) => {
+        if (err) {
+            console.error('Error fetching task:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (taskResults.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        const task = taskResults[0];
+
+        // Check if the current user is the creator or the assigned user
+        if (task.email !== userEmail && task.assigned_to_user_id !== userId && task.assigned_to_email !== userEmail) {
+            return res.status(403).json({ error: 'Only the creator or assigned user can mark this task as done' });
+        }
+
+        // Check if the task is already marked as done
+        if (task.status === 'done') {
+            return res.status(400).json({ error: 'Task is already marked as done' });
+        }
+
+        // Update the task status to 'done'
+        const updateQuery = 'UPDATE tasks SET status = ? WHERE id = ?';
+        db.query(updateQuery, ['done', taskId], (err, result) => {
+            if (err) {
+                console.error('Error updating task status:', err);
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ message: 'Task marked as done successfully' });
+        });
+    });
+});
 
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
