@@ -287,7 +287,7 @@ app.get('/api/tasks/created', verifyToken, (req, res) => {
 app.get('/api/tasks/assigned', verifyToken, (req, res) => {
     const user_id = req.user.id;
     const user_email = req.user.email;
-    const { f } = req.query; 
+    const { f } = req.query;  
 
     let sql = `
         SELECT * FROM tasks 
@@ -344,16 +344,17 @@ app.get('/api/tasks/:task_id/activities', verifyToken, (req, res) => {
             activity.description AS activity_description    
         FROM activity
         JOIN tasks ON activity.tasks_id = tasks.id
-        WHERE (tasks.user_id = ? OR tasks.assigned_to_email = ?) 
+        WHERE (tasks.user_id = ? OR tasks.assigned_to_email = ? OR activity.assigned_to_user_id = ?)
         AND tasks.id = ?
-        ORDER BY activity.date
+        ORDER BY activity.date;
     `;
 
-    db.query(sql, [user_id, user_email, task_id], (err, results) => {
+    db.query(sql, [user_id, user_email, user_id, task_id], (err, results) => {
         if (err) {
-            console.error('Error fetching activities:', err);
-            return res.status(500).json({ error: 'Server error' });
+            console.error('Error fetching activities:', err.sqlMessage || err);
+            return res.status(500).json({ error: 'Server error', details: err.sqlMessage || err });
         }
+
         if (results.length === 0) {
             return res.status(404).json({ error: 'No activities found for this task' });
         }
@@ -377,6 +378,7 @@ app.get('/api/tasks/:task_id/activities', verifyToken, (req, res) => {
         res.json(taskData);
     });
 });
+
 
 // POST: Add a new activity
 app.post('/api/activities', verifyToken, (req, res) => {
@@ -463,6 +465,77 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
         });
     });
 });
+
+// POST: Assign task to a user using email and directly update assigned_to_user_id in activity table
+/*app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
+    const { assigned_to_email } = req.body;
+    const taskId = req.params.taskId;
+
+    if (!assigned_to_email) {
+        return res.status(400).json({ error: 'Assigned_to_email is required' });
+    }
+
+    // Check if the task exists
+    const taskQuery = 'SELECT * FROM tasks WHERE id = ?';
+    db.query(taskQuery, [taskId], (err, taskResults) => {
+        if (err) {
+            console.error('Error fetching task:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (taskResults.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        // Fetch assigned user ID using email
+        const userQuery = 'SELECT id FROM users WHERE email = ?';
+        db.query(userQuery, [assigned_to_email], (err, userResults) => {
+            if (err) {
+                console.error('Error fetching user:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            if (userResults.length === 0) {
+                return res.status(404).json({ error: 'Assigned user not found' });
+            }
+
+            const assigned_to_user_id = userResults[0].id;
+
+            // Update the task with assigned_to_user_id and assigned_to_email
+            const updateTaskQuery = `
+                UPDATE tasks 
+                SET assigned_to_user_id = ?, assigned_to_email = ? 
+                WHERE id = ?
+            `;
+            db.query(updateTaskQuery, [assigned_to_user_id, assigned_to_email, taskId], (err, result) => {
+                if (err) {
+                    console.error('Error updating task:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+
+                // Insert activity log and store assigned_to_user_id directly in activity table
+                const insertActivityQuery = `
+                    INSERT INTO activity (tasks_id, date, email, description, assigned_to_user_id) 
+                    VALUES (?, NOW(), ?, ?, ?)
+                `;
+                const activityDescription = `Task assigned to ${assigned_to_email}`;
+                
+                db.query(insertActivityQuery, [taskId, assigned_to_email, activityDescription, assigned_to_user_id], (err, activityResult) => {
+                    if (err) {
+                        console.error('Error inserting activity:', err);
+                        return res.status(500).json({ error: err.message });
+                    }
+
+                    res.json({
+                        message: 'Task assigned successfully and activity logged',
+                        assigned_to_user_id,
+                        assigned_to_email,
+                        activity_id: activityResult.insertId
+                    });
+                });
+            });
+        });
+    });
+});*/
+
 
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
