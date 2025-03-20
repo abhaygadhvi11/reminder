@@ -202,7 +202,7 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
 });*/
 
 // POST: Add a new task
-app.post('/api/tasks', verifyToken, (req, res) => {
+/*app.post('/api/tasks', verifyToken, (req, res) => {
     const { description, startdate, enddate, assigned_users } = req.body;  
     const user_id = req.user.id;  
     const user_email = req.user.email; 
@@ -224,6 +224,51 @@ app.post('/api/tasks', verifyToken, (req, res) => {
             return res.status(500).json({ error: err.message });
         }
         res.json({ message: 'Task added successfully', id: result.insertId });
+    });
+});*/
+
+app.post('/api/tasks', verifyToken, (req, res) => {
+    const { description, startdate, enddate } = req.body;  
+    const user_id = req.user.id;  
+    const user_email = req.user.email; 
+
+    if (!description || !startdate || !enddate) {
+        return res.status(400).json({ error: 'Description, Start Date, and End Date are required' });
+    }
+
+    // Define a fixed sequence
+    const assigned_users = [1, 2, 3, 4];
+
+    // Get the last assigned user
+    const getLastAssignedQuery = 'SELECT assigned_to_user_id FROM tasks ORDER BY id DESC LIMIT 1';
+
+    db.query(getLastAssignedQuery, (err, result) => {
+        if (err) {
+            console.error('Error fetching last assigned user:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        let lastAssignedUser = result.length ? result[0].assigned_to_user_id : null;
+        let nextAssignedUser;
+
+        if (lastAssignedUser === null || !assigned_users.includes(lastAssignedUser)) {
+            nextAssignedUser = assigned_users[0]; // Start from first if no tasks exist
+        } else {
+            let currentIndex = assigned_users.indexOf(lastAssignedUser);
+            nextAssignedUser = assigned_users[(currentIndex + 1) % assigned_users.length]; // Rotate in sequence
+        }
+
+        const assignedSequence = JSON.stringify(assigned_users);
+
+        const sql = 'INSERT INTO tasks (description, email, startdate, enddate, user_id, assigned_sequence, assigned_to_user_id, current_index, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+        db.query(sql, [description, user_email, startdate, enddate, user_id, assignedSequence, nextAssignedUser, 0, 'pending'], (err, result) => { 
+            if (err) {
+                console.error('Error inserting data:', err);   
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ message: 'Task added successfully', id: result.insertId, assigned_to: nextAssignedUser });
+        });
     });
 });
 
