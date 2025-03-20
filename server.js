@@ -227,6 +227,7 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
     });
 });*/
 
+// POST: Add a new task
 app.post('/api/tasks', verifyToken, (req, res) => {
     const { description, startdate, enddate } = req.body;  
     const user_id = req.user.id;  
@@ -657,7 +658,7 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
 
 
 // POST: Mark a task as done 
-app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
+/*app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
     const taskId = Number(req.params.taskId); // Ensure taskId is a number
 
     if (isNaN(taskId)) {
@@ -724,7 +725,85 @@ app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
             });
         }
     });
+});*/
+
+app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
+    const taskId = Number(req.params.taskId);
+    const userId = req.user.id; // Get the authenticated user's ID
+
+    if (isNaN(taskId)) {
+        return res.status(400).json({ error: 'Invalid Task ID' });
+    }
+
+    // Fetch task details
+    db.query('SELECT * FROM tasks WHERE id = ?', [taskId], (err, results) => {
+        if (err) {
+            console.error('Error fetching task:', err);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        let task = results[0];
+
+        // Parse assigned sequence
+        let assignedSequence;
+        try {
+            assignedSequence = JSON.parse(task.assigned_sequence);
+            if (!Array.isArray(assignedSequence) || assignedSequence.length === 0) {
+                throw new Error('assigned_sequence is not a valid array');
+            }
+        } catch (error) {
+            console.error('Invalid assigned_sequence format:', error);
+            return res.status(500).json({ error: 'Invalid assigned_sequence format' });
+        }
+
+        let currentIndex = Number(task.current_index) || 0;
+        let completedBy = JSON.parse(task.completed_by || '[]');
+
+        // Check if user has already marked it as done
+        if (completedBy.includes(userId)) {
+            return res.status(400).json({ error: 'You have already marked this task as done' });
+        }
+
+        // Add user to completed list
+        completedBy.push(userId);
+        const updatedCompletedBy = JSON.stringify(completedBy);
+
+        if (currentIndex + 1 < assignedSequence.length) {
+            // Move to the next user
+            let nextUserId = Number(assignedSequence[currentIndex + 1]);
+
+            db.query(
+                'UPDATE tasks SET assigned_to_user_id = ?, current_index = ?, completed_by = ? WHERE id = ?',
+                [nextUserId, currentIndex + 1, updatedCompletedBy, taskId],
+                (updateErr) => {
+                    if (updateErr) {
+                        console.error('Error updating task:', updateErr);
+                        return res.status(500).json({ error: 'Internal Server Error' });
+                    }
+                    res.json({ message: `Task reassigned to User ${nextUserId}` });
+                }
+            );
+        } else {
+            // If last user has completed, mark task as done
+            db.query(
+                'UPDATE tasks SET status = "done", completed_by = ? WHERE id = ?',
+                [updatedCompletedBy, taskId],
+                (updateErr) => {
+                    if (updateErr) {
+                        console.error('Error updating task status:', updateErr);
+                        return res.status(500).json({ error: 'Internal Server Error' });
+                    }
+                    res.json({ message: 'Task completed' });
+                }
+            );
+        }
+    });
 });
+
 
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
