@@ -13,7 +13,7 @@ const jwtSecret = process.env.JWT_SECRET;
 
 dotenv.config();
 const app = express();
-const p = 4002;
+const p = 4002; 
 
 // Middleware
 //app.use(cors());
@@ -182,7 +182,7 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
 });  
 
 // POST: Add a new task
-app.post('/api/tasks', verifyToken, (req, res) => {
+/*app.post('/api/tasks', verifyToken, (req, res) => {
     const { description, startdate, enddate } = req.body;  
     const user_id = req.user.id;  
     const user_email = req.user.email; 
@@ -199,8 +199,33 @@ app.post('/api/tasks', verifyToken, (req, res) => {
         }
         res.json({ message: 'Task added successfully', id: result.insertId });
     });
-});
+});*/
 
+// POST: Add a new task
+app.post('/api/tasks', verifyToken, (req, res) => {
+    const { description, startdate, enddate, assigned_users } = req.body;  
+    const user_id = req.user.id;  
+    const user_email = req.user.email; 
+
+    if (!description || !startdate || !enddate || !Array.isArray(assigned_users) || assigned_users.length === 0) {
+        return res.status(400).json({ error: 'Description, Start Date, End Date, and Assigned Users are required' });
+    }
+
+    const assignedSequence = JSON.stringify(assigned_users);
+    //console.log("Assigned Sequence before insertion:", assignedSequence); // Debugging
+
+    const firstAssignedUser = assigned_users[0];
+
+    const sql = 'INSERT INTO tasks (description, email, startdate, enddate, user_id, assigned_sequence, assigned_to_user_id, current_index, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    
+    db.query(sql, [description, user_email, startdate, enddate, user_id, assignedSequence, firstAssignedUser, 0, 'pending'], (err, result) => { 
+        if (err) {
+            console.error('Error inserting data:', err);   
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: 'Task added successfully', id: result.insertId });
+    });
+});
 
 // GET: Fetch tasks for a specific user (using user_id and email)
 app.get('/api/tasks/user', verifyToken, (req, res) => {
@@ -358,7 +383,7 @@ app.get("/api/tasks/:task_id/activities", verifyToken, (req, res) => {
       if (results.length === 0) {
         return res
           .status(404)
-          .json({ error: "No activities found for this task" });      fff
+          .json({ error: "No activities found for this task or user" });      
       }
   
       const taskData = {
@@ -382,9 +407,8 @@ app.get("/api/tasks/:task_id/activities", verifyToken, (req, res) => {
     });
   });
 
-
-  // POST: Add a new activity
- app.post("/api/activities", verifyToken, (req, res) => {
+// POST: Add a new activity
+app.post("/api/activities", verifyToken, (req, res) => {
     const { task_id, description } = req.body;
     const user_id = req.user.id;
     const email = req.user.email;
@@ -485,7 +509,7 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
 });
 
 // POST: Mark a task as done 
-app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
+/*app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
     const taskId = req.params.taskId;
     const userId = req.user.id; 
     const userEmail = req.user.email;
@@ -520,8 +544,78 @@ app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
             res.json({ message: 'Task marked as done successfully' });
         });
     });
-});
+});*/
 
+
+// POST: Mark a task as done 
+app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
+    const taskId = Number(req.params.taskId); // Ensure taskId is a number
+
+    if (isNaN(taskId)) {
+        return res.status(400).json({ error: 'Invalid Task ID' });
+    }
+
+    db.query('SELECT * FROM tasks WHERE id = ?', [taskId], (err, results) => {
+        if (err) {
+            console.error('Error fetching task:', err);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        let task = results[0];
+        //console.log('Raw assigned_sequence from DB:', task.assigned_sequence);
+
+        // Ensure assigned_sequence is a valid JSON array
+        let assignedSequence;
+        try {
+            assignedSequence = JSON.parse(task.assigned_sequence);
+            console.log('Parsed assigned_sequence:', assignedSequence); 
+
+            if (!Array.isArray(assignedSequence) || assignedSequence.length === 0) {
+                throw new Error('assigned_sequence is not a valid array');
+            }
+        } catch (error) {
+            console.error('Invalid assigned_sequence format:', error);
+            return res.status(500).json({ error: 'Invalid assigned_sequence format' });
+        }
+
+        // Ensure current_index is a valid number
+        let currentIndex = Number(task.current_index) || 0;
+        console.log('Current index:', currentIndex); 
+
+        if (currentIndex + 1 < assignedSequence.length) {
+            // Move to next user
+            let nextUserId = Number(assignedSequence[currentIndex + 1]);
+            console.log(`Moving to next user: ${nextUserId}`); 
+
+            db.query(
+                'UPDATE tasks SET assigned_to_user_id = ?, current_index = ? WHERE id = ?',
+                [nextUserId, currentIndex + 1, taskId],
+                (updateErr) => {
+                    if (updateErr) {
+                        console.error('Error updating task:', updateErr);
+                        return res.status(500).json({ error: 'Internal Server Error' });
+                    }
+                    res.json({ message: `Task reassigned to User ${nextUserId}` });
+                }
+            );
+        } else {
+            // If last user has completed, mark task as done
+            console.log('Task is now completed'); 
+
+            db.query('UPDATE tasks SET status = "done" WHERE id = ?', [taskId], (updateErr) => {
+                if (updateErr) {
+                    console.error('Error updating task status:', updateErr);
+                    return res.status(500).json({ error: 'Internal Server Error' });
+                }
+                res.json({ message: 'Task completed' });
+            });
+        }
+    });
+});
 
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
