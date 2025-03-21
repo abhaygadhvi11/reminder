@@ -182,52 +182,6 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
 });  
 
 // POST: Add a new task
-/*app.post('/api/tasks', verifyToken, (req, res) => {
-    const { description, startdate, enddate } = req.body;  
-    const user_id = req.user.id;  
-    const user_email = req.user.email; 
-
-    if (!description || !startdate || !enddate) {
-        return res.status(400).json({ error: 'Description, Start Date, and End Date are required' });
-    }
-
-    const sql = 'INSERT INTO tasks (description, email, startdate, enddate, user_id) VALUES (?, ?, ?, ?, ?)';
-    db.query(sql, [description, user_email, startdate, enddate, user_id], (err, result) => { 
-        if (err) {
-            console.error('Error inserting data:', err);   
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ message: 'Task added successfully', id: result.insertId });
-    });
-});*/
-
-// POST: Add a new task
-/*app.post('/api/tasks', verifyToken, (req, res) => {
-    const { description, startdate, enddate, assigned_users } = req.body;  
-    const user_id = req.user.id;  
-    const user_email = req.user.email; 
-
-    if (!description || !startdate || !enddate || !Array.isArray(assigned_users) || assigned_users.length === 0) {
-        return res.status(400).json({ error: 'Description, Start Date, End Date, and Assigned Users are required' });
-    }
-
-    const assignedSequence = JSON.stringify(assigned_users);
-    //console.log("Assigned Sequence before insertion:", assignedSequence); // Debugging
-
-    const firstAssignedUser = assigned_users[0];
-
-    const sql = 'INSERT INTO tasks (description, email, startdate, enddate, user_id, assigned_sequence, assigned_to_user_id, current_index, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-    
-    db.query(sql, [description, user_email, startdate, enddate, user_id, assignedSequence, firstAssignedUser, 0, 'pending'], (err, result) => { 
-        if (err) {
-            console.error('Error inserting data:', err);   
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ message: 'Task added successfully', id: result.insertId });
-    });
-});*/
-
-// POST: Add a new task
 app.post('/api/tasks', verifyToken, (req, res) => {
     const { description, startdate, enddate } = req.body;  
     const user_id = req.user.id;  
@@ -396,65 +350,7 @@ app.get('/api/tasks/assigned', verifyToken, (req, res) => {
 });
 
 // GET: Fetch all activities for a specific task, including assigned tasks
-/*app.get("/api/tasks/:task_id/activities", verifyToken, (req, res) => {
-    const user_id = req.user.id;
-    const task_id = req.params.task_id;
-    const user_email = req.user.email;
-  
-    const sql = `
-            SELECT 
-                tasks.id AS taskid, 
-                tasks.description AS task_description,                                                          
-                tasks.startdate,                                                                                          
-                tasks.enddate,
-                tasks.email AS task_email,
-                tasks.assigned_to_email AS task_assigned_to_email,
-                tasks.status AS task_status,
-                activity.id AS activityid,
-                activity.date,      
-                activity.email AS activity_email,    
-                activity.description AS activity_description    
-            FROM activity
-            JOIN tasks ON activity.tasks_id = tasks.id
-            WHERE (tasks.user_id = ? OR tasks.assigned_to_email = ?) 
-            AND tasks.id = ?
-            ORDER BY activity.date
-        `;
-  
-    db.query(sql, [user_id, user_email, task_id], (err, results) => {
-      if (err) {
-        console.error("Error fetching activities:", err);
-        return res.status(500).json({ error: "Server error" });
-      }
-      if (results.length === 0) {
-        return res
-          .status(404)
-          .json({ error: "No activities found for this task or user" });      
-      }
-  
-      const taskData = {
-        taskid: task_id,
-        description: results[0]?.task_description || null,
-        startdate: results[0]?.startdate || null,
-        enddate: results[0]?.enddate || null,
-        email: results[0]?.task_email || null,
-        task_status: results[0]?.task_status || null,
-        assigned_to_email: results[0]?.task_assigned_to_email || null,
-        activities: results.map((activity) => ({
-          activityid: activity.activityid,
-          task_id: activity.taskid,
-          email: activity.activity_email,
-          description: activity.activity_description || null,
-          date: activity.date,
-        })),
-      };
-  
-      res.json(taskData);
-    });
-  });
-*/
-
-    app.get("/api/tasks/:task_id/activities", verifyToken, (req, res) => {
+app.get("/api/tasks/:task_id/activities", verifyToken, (req, res) => {
         const user_id = req.user.id;
         const task_id = req.params.task_id;
         const user_email = req.user.email;
@@ -519,10 +415,10 @@ app.get('/api/tasks/assigned', verifyToken, (req, res) => {
 
 // POST: Add a new activity
 app.post("/api/activities", verifyToken, (req, res) => {
-    const { task_id, description } = req.body;
+    const { task_id, description, date } = req.body;  // Accept date from request body
     const user_id = req.user.id;
     const email = req.user.email;
-    const date = new Date();
+    const activityDate = date ? new Date(date) : new Date(); // Use provided date or default to server date
   
     if (!task_id || !description) {
       return res
@@ -530,8 +426,8 @@ app.post("/api/activities", verifyToken, (req, res) => {
         .json({ error: "Task ID and Description are required" });
     }
   
-    const checkTaskQuery = `SELECT * FROM tasks  WHERE id = ? 
-            AND (user_id = ? OR assigned_to_user_id = ? OR assigned_to_email = ?)`;
+    const checkTaskQuery = `SELECT * FROM tasks  
+            WHERE id = ? AND (user_id = ? OR assigned_to_user_id = ? OR assigned_to_email = ?)`;
   
     db.query(
       checkTaskQuery,
@@ -549,10 +445,10 @@ app.post("/api/activities", verifyToken, (req, res) => {
         }
   
         const insertActivityQuery =
-          "INSERT INTO activity (tasks_id, date, email, description) VALUES (?, NOW(), ?, ?)";
+          "INSERT INTO activity (tasks_id, date, email, description) VALUES (?, ?, ?, ?)";
         db.query(
           insertActivityQuery,
-          [task_id, email, description],
+          [task_id, activityDate, email, description],
           (err, result) => {
             if (err) {
               console.error("Error inserting activity:", err);
@@ -618,120 +514,12 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
     });
 });
 
-// POST: Mark a task as done 
+// POST: Mark a task as done
 /*app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
-    const taskId = req.params.taskId;
-    const userId = req.user.id; 
-    const userEmail = req.user.email;
-
-    const taskQuery = 'SELECT email, assigned_to_user_id, assigned_to_email, status FROM tasks WHERE id = ?';
-    db.query(taskQuery, [taskId], (err, taskResults) => {
-        if (err) {
-            console.error('Error fetching task:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-        if (taskResults.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-
-        const task = taskResults[0];
-
-        if (task.email !== userEmail && task.assigned_to_user_id !== userId && task.assigned_to_email !== userEmail) {
-            return res.status(403).json({ error: 'Only the creator or assigned user can mark this task as done' });
-        }
-
-        if (task.status === 'done') {
-            return res.status(400).json({ error: 'Task is already marked as done' });
-        }
-
-    
-        const updateQuery = 'UPDATE tasks SET status = ? WHERE id = ?';
-        db.query(updateQuery, ['done', taskId], (err, result) => {
-            if (err) {
-                console.error('Error updating task status:', err);
-                return res.status(500).json({ error: err.message });
-            }
-            res.json({ message: 'Task marked as done successfully' });
-        });
-    });
-});*/
-
-
-// POST: Mark a task as done 
-/*app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
-    const taskId = Number(req.params.taskId); // Ensure taskId is a number
-
-    if (isNaN(taskId)) {
-        return res.status(400).json({ error: 'Invalid Task ID' });
-    }
-
-    db.query('SELECT * FROM tasks WHERE id = ?', [taskId], (err, results) => {
-        if (err) {
-            console.error('Error fetching task:', err);
-            return res.status(500).json({ error: 'Internal Server Error' });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-
-        let task = results[0];
-        //console.log('Raw assigned_sequence from DB:', task.assigned_sequence);
-
-        // Ensure assigned_sequence is a valid JSON array
-        let assignedSequence;
-        try {
-            assignedSequence = JSON.parse(task.assigned_sequence);
-            console.log('Parsed assigned_sequence:', assignedSequence); 
-
-            if (!Array.isArray(assignedSequence) || assignedSequence.length === 0) {
-                throw new Error('assigned_sequence is not a valid array');
-            }
-        } catch (error) {
-            console.error('Invalid assigned_sequence format:', error);
-            return res.status(500).json({ error: 'Invalid assigned_sequence format' });
-        }
-
-        // Ensure current_index is a valid number
-        let currentIndex = Number(task.current_index) || 0;
-        console.log('Current index:', currentIndex); 
-
-        if (currentIndex + 1 < assignedSequence.length) {
-            // Move to next user
-            let nextUserId = Number(assignedSequence[currentIndex + 1]);
-            console.log(`Moving to next user: ${nextUserId}`); 
-
-            db.query(
-                'UPDATE tasks SET assigned_to_user_id = ?, current_index = ? WHERE id = ?',
-                [nextUserId, currentIndex + 1, taskId],
-                (updateErr) => {
-                    if (updateErr) {
-                        console.error('Error updating task:', updateErr);
-                        return res.status(500).json({ error: 'Internal Server Error' });
-                    }
-                    res.json({ message: `Task reassigned to User ${nextUserId}` });
-                }
-            );
-        } else {
-            // If last user has completed, mark task as done
-            console.log('Task is now completed'); 
-
-            db.query('UPDATE tasks SET status = "done" WHERE id = ?', [taskId], (updateErr) => {
-                if (updateErr) {
-                    console.error('Error updating task status:', updateErr);
-                    return res.status(500).json({ error: 'Internal Server Error' });
-                }
-                res.json({ message: 'Task completed' });
-            });
-        }
-    });
-});*/
-
-app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
     const taskId = Number(req.params.taskId);
-    const userId = req.user.id; // Get the authenticated user's ID
+    const userId = req.user.id;
 
-    if (isNaN(taskId)) {
+    if (isNaN(taskId)) {    
         return res.status(400).json({ error: 'Invalid Task ID' });
     }
 
@@ -802,7 +590,95 @@ app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
             );
         }
     });
+});*/
+ 
+// POST: Mark a task as done
+app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
+    const taskId = Number(req.params.taskId);
+    const userId = req.user.id;
+
+    if (isNaN(taskId)) {    
+        return res.status(400).json({ error: 'Invalid Task ID' });
+    }
+
+    // Fetch task details
+    db.query('SELECT * FROM tasks WHERE id = ?', [taskId], (err, results) => {
+        if (err) {
+            console.error('Error fetching task:', err);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        let task = results[0];
+
+        // Parse assigned sequence
+        let assignedSequence;
+        try {
+            assignedSequence = JSON.parse(task.assigned_sequence);
+            if (!Array.isArray(assignedSequence) || assignedSequence.length === 0) {
+                throw new Error('assigned_sequence is not a valid array');
+            }
+        } catch (error) {
+            console.error('Invalid assigned_sequence format:', error);
+            return res.status(500).json({ error: 'Invalid assigned_sequence format' });
+        }
+
+        let currentIndex = Number(task.current_index) || 0;
+        let completedBy = JSON.parse(task.completed_by || '[]');
+
+        // Check if user has already marked it as done
+        if (completedBy.includes(userId)) {
+            return res.status(400).json({ error: 'You have already marked this task as done' });
+        }
+
+        // Add user to completed list
+        completedBy.push(userId);
+        const updatedCompletedBy = JSON.stringify(completedBy);
+
+        let newStatus = task.status;
+
+        // First user marks as done → update to "in progress"
+        if (currentIndex === 0) {
+            newStatus = "in progress";
+        }
+
+        if (currentIndex + 1 < assignedSequence.length) {
+            // Move to the next user
+            let nextUserId = Number(assignedSequence[currentIndex + 1]);
+
+            db.query(
+                'UPDATE tasks SET assigned_to_user_id = ?, current_index = ?, completed_by = ?, status = ? WHERE id = ?',
+                [nextUserId, currentIndex + 1, updatedCompletedBy, newStatus, taskId],
+                (updateErr) => {
+                    if (updateErr) {
+                        console.error('Error updating task:', updateErr);
+                        return res.status(500).json({ error: 'Internal Server Error' });
+                    }
+                    res.json({ message: `Task reassigned to User ${nextUserId}`, status: newStatus });
+                }
+            );
+        } else {
+            // Last user (4th user) marks as done → update to "done"
+            newStatus = "done";
+
+            db.query(
+                'UPDATE tasks SET status = ?, completed_by = ? WHERE id = ?',
+                [newStatus, updatedCompletedBy, taskId],
+                (updateErr) => {
+                    if (updateErr) {
+                        console.error('Error updating task status:', updateErr);
+                        return res.status(500).json({ error: 'Internal Server Error' });
+                    }
+                    res.json({ message: 'Task completed', status: newStatus });
+                }
+            );
+        }
+    });
 });
+
 
 
 app.listen(p, () => {
