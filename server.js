@@ -165,7 +165,6 @@ app.post('/api/login', (req, res) => {
 // GET: Fetch all tasks
 app.get('/api/tasks' , verifyToken , (req, res) => {  
     const { f } = req.query;                                  
-     
     let sql = 'SELECT * FROM tasks ORDER BY enddate ASC';
     if (f == 1) { 
         sql = `SELECT * FROM tasks WHERE enddate >= CURDATE() AND enddate <= DATE_ADD(CURDATE(), INTERVAL 7 DAY ) ORDER BY enddate ASC`;
@@ -182,19 +181,19 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
 });  
 
 // POST: Add a new task
-app.post('/api/tasks', verifyToken, (req, res) => {
-    const { description, startdate, enddate } = req.body;  
-    const user_id = req.user.id;  
-    const user_email = req.user.email; 
+/*app.post('/api/tasks', verifyToken, (req, res) => {
+    const { description, startdate, enddate, reminder } = req.body;
+    const user_id = req.user.id;
+    const user_email = req.user.email;
 
     if (!description || !startdate || !enddate) {
         return res.status(400).json({ error: 'Description, Start Date, and End Date are required' });
     }
 
-    // Define a fixed sequence
+    // Assigned users (Round-robin logic)
     const assigned_users = [1, 2, 3, 4];
 
-    // Get the last assigned user
+    // Fetch the last assigned user
     const getLastAssignedQuery = 'SELECT assigned_to_user_id FROM tasks ORDER BY id DESC LIMIT 1';
 
     db.query(getLastAssignedQuery, (err, result) => {
@@ -215,14 +214,102 @@ app.post('/api/tasks', verifyToken, (req, res) => {
 
         const assignedSequence = JSON.stringify(assigned_users);
 
-        const sql = 'INSERT INTO tasks (description, email, startdate, enddate, user_id, assigned_sequence, assigned_to_user_id, current_index, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        // Calculate reminder date (15 days before `enddate`)
+        let reminderDate = new Date(enddate); 
+        reminderDate.setDate(reminderDate.getDate() - 15);
+        reminderDate = reminder ? reminderDate.toISOString().split("T")[0] : null;
 
-        db.query(sql, [description, user_email, startdate, enddate, user_id, assignedSequence, nextAssignedUser, 0, 'pending'], (err, result) => { 
+        const sql = `
+            INSERT INTO tasks 
+            (description, email, startdate, enddate, reminder_date, user_id, assigned_sequence, assigned_to_user_id, current_index, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+        db.query(sql, [description, user_email, startdate, enddate, reminderDate, user_id, assignedSequence, nextAssignedUser, 0, 'pending'], (err, result) => {
             if (err) {
-                console.error('Error inserting data:', err);   
+                console.error('Error inserting data:', err);
                 return res.status(500).json({ error: err.message });
             }
-            res.json({ message: 'Task added successfully', id: result.insertId, assigned_to: nextAssignedUser });
+            res.json({
+                message: 'Task added successfully',
+                id: result.insertId,
+                assigned_to: nextAssignedUser,
+                reminder_date: reminderDate
+            });
+        });
+    });
+});*/
+
+// POST: Add a new task
+app.post('/api/tasks', verifyToken, (req, res) => {
+    const { id, description, startdate, enddate, reminder } = req.body;
+    const user_id = req.user.id;
+    const user_email = req.user.email;
+
+    if (!description || !startdate || !enddate) {
+        return res.status(400).json({ error: 'Description, Start Date, and End Date are required' });
+    }
+
+    // If task ID is provided, update reminder status instead of creating a new task
+    if (id) {
+        const updateSql = "UPDATE tasks SET reminder = ? WHERE id = ?";
+        db.query(updateSql, [reminder, id], (err, result) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ message: "Task not found" });
+            }
+            return res.json({ message: "Reminder updated successfully" });
+        });
+        return;
+    }
+
+    // Assigned users (Round-robin logic)
+    const assigned_users = [1, 2, 3, 4];
+
+    // Fetch the last assigned user
+    const getLastAssignedQuery = 'SELECT assigned_to_user_id FROM tasks ORDER BY id DESC LIMIT 1';
+
+    db.query(getLastAssignedQuery, (err, result) => {
+        if (err) {
+            console.error('Error fetching last assigned user:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        let lastAssignedUser = result.length ? result[0].assigned_to_user_id : null;
+        let nextAssignedUser;
+
+        if (lastAssignedUser === null || !assigned_users.includes(lastAssignedUser)) {
+            nextAssignedUser = assigned_users[0]; // Start from first if no tasks exist
+        } else {
+            let currentIndex = assigned_users.indexOf(lastAssignedUser);
+            nextAssignedUser = assigned_users[(currentIndex + 1) % assigned_users.length]; // Rotate in sequence
+        }
+
+        const assignedSequence = JSON.stringify(assigned_users);
+
+        // Calculate reminder date (15 days before `enddate`)
+        let reminderDate = new Date(enddate);
+        reminderDate.setDate(reminderDate.getDate() - 15);
+        reminderDate = reminder ? reminderDate.toISOString().split("T")[0] : null;
+
+        const sql = `
+            INSERT INTO tasks 
+            (description, email, startdate, enddate, reminder_date, user_id, assigned_sequence, assigned_to_user_id, current_index, status, reminder) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        db.query(sql, [description, user_email, startdate, enddate, reminderDate, user_id, assignedSequence, nextAssignedUser, 0, 'pending', reminder], (err, result) => {
+            if (err) {
+                console.error('Error inserting data:', err);
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({
+                message: 'Task added successfully',
+                id: result.insertId,
+                assigned_to: nextAssignedUser,
+                reminder_date: reminderDate
+            });
         });
     });
 });
@@ -515,84 +602,6 @@ app.post('/api/tasks/:taskId/assign', verifyToken, (req, res) => {
 });
 
 // POST: Mark a task as done
-/*app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
-    const taskId = Number(req.params.taskId);
-    const userId = req.user.id;
-
-    if (isNaN(taskId)) {    
-        return res.status(400).json({ error: 'Invalid Task ID' });
-    }
-
-    // Fetch task details
-    db.query('SELECT * FROM tasks WHERE id = ?', [taskId], (err, results) => {
-        if (err) {
-            console.error('Error fetching task:', err);
-            return res.status(500).json({ error: 'Internal Server Error' });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-
-        let task = results[0];
-
-        // Parse assigned sequence
-        let assignedSequence;
-        try {
-            assignedSequence = JSON.parse(task.assigned_sequence);
-            if (!Array.isArray(assignedSequence) || assignedSequence.length === 0) {
-                throw new Error('assigned_sequence is not a valid array');
-            }
-        } catch (error) {
-            console.error('Invalid assigned_sequence format:', error);
-            return res.status(500).json({ error: 'Invalid assigned_sequence format' });
-        }
-
-        let currentIndex = Number(task.current_index) || 0;
-        let completedBy = JSON.parse(task.completed_by || '[]');
-
-        // Check if user has already marked it as done
-        if (completedBy.includes(userId)) {
-            return res.status(400).json({ error: 'You have already marked this task as done' });
-        }
-
-        // Add user to completed list
-        completedBy.push(userId);
-        const updatedCompletedBy = JSON.stringify(completedBy);
-
-        if (currentIndex + 1 < assignedSequence.length) {
-            // Move to the next user
-            let nextUserId = Number(assignedSequence[currentIndex + 1]);
-
-            db.query(
-                'UPDATE tasks SET assigned_to_user_id = ?, current_index = ?, completed_by = ? WHERE id = ?',
-                [nextUserId, currentIndex + 1, updatedCompletedBy, taskId],
-                (updateErr) => {
-                    if (updateErr) {
-                        console.error('Error updating task:', updateErr);
-                        return res.status(500).json({ error: 'Internal Server Error' });
-                    }
-                    res.json({ message: `Task reassigned to User ${nextUserId}` });
-                }
-            );
-        } else {
-            // If last user has completed, mark task as done
-            db.query(
-                'UPDATE tasks SET status = "done", completed_by = ? WHERE id = ?',
-                [updatedCompletedBy, taskId],
-                (updateErr) => {
-                    if (updateErr) {
-                        console.error('Error updating task status:', updateErr);
-                        return res.status(500).json({ error: 'Internal Server Error' });
-                    }
-                    res.json({ message: 'Task completed' });
-                }
-            );
-        }
-    });
-});*/
- 
-// POST: Mark a task as done
 app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
     const taskId = Number(req.params.taskId);
     const userId = req.user.id;
@@ -661,7 +670,7 @@ app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
                 }
             );
         } else {
-            // Last user (4th user) marks as done → update to "done"
+           
             newStatus = "done";
 
             db.query(
@@ -679,8 +688,24 @@ app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
     });
 });
 
-
-
+// PUT: marks the specific task for the reminder 
+/*app.put("/tasks/:id/reminder", verifyToken,(req, res) => {
+    const taskId = req.params.id;
+    const { reminder } = req.body; // Expecting reminder: true or false
+  
+    const sql = "UPDATE tasks SET reminder = ? WHERE id = ?";
+    db.query(sql, [reminder, taskId], (err, result) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      res.json({ message: "Reminder updated successfully" });
+    });
+  });
+  */
+  
 app.listen(p, () => {
     console.log(`Server is running on port ${p}`);
 });   
