@@ -181,7 +181,7 @@ app.get('/api/tasks' , verifyToken , (req, res) => {
 });  
 
 // POST: Add a new task
-app.post('/api/tasks', verifyToken, (req, res) => {
+/*app.post('/api/tasks', verifyToken, (req, res) => {
     const { description, startdate, enddate, reminder } = req.body;
     const user_id = req.user.id;
     const user_email = req.user.email;
@@ -215,7 +215,52 @@ app.post('/api/tasks', verifyToken, (req, res) => {
             reminder_date: reminderDate
         });
     });
+});*/
+
+// POST: Add a new task
+app.post('/api/tasks', verifyToken, (req, res) => {
+    const { description, startdate, enddate, reminder } = req.body;
+    const user_id = req.user.id;
+    const user_email = req.user.email;
+
+    if (!description || !startdate || !enddate) {
+        return res.status(400).json({ error: 'Description, Start Date, and End Date are required' });
+    }
+
+    const assignedSequence = "1,2,3,4"; // Fixed sequence stored as text
+    const initialAssignedUser = 1; // Always start with user 1
+
+    // Convert reminder to 0 or 1
+    const reminderValue = reminder ? 1 : 0;
+
+    // Calculate reminder date (15 days before `enddate`)
+    let reminderDate = null;
+    if (reminderValue === 1) {
+        let tempReminderDate = new Date(enddate);
+        tempReminderDate.setDate(tempReminderDate.getDate() - 15);
+        reminderDate = tempReminderDate.toISOString().split("T")[0];
+    }
+
+    const sql = `
+        INSERT INTO tasks 
+        (description, email, startdate, enddate, reminder, reminder_date, user_id, assigned_sequence, assigned_to_user_id, current_index, status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+    db.query(sql, [description, user_email, startdate, enddate, reminderValue, reminderDate, user_id, assignedSequence, initialAssignedUser, 0, 'pending'], (err, result) => {
+        if (err) {
+            console.error('Error inserting data:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({
+            message: 'Task added successfully',
+            id: result.insertId,
+            assigned_to: initialAssignedUser,
+            reminder: reminderValue,  // Return reminder as 0 or 1
+            reminder_date: reminderDate
+        });
+    });
 });
+
 
 // POST: Mark a task as done
 app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
