@@ -261,7 +261,6 @@ app.post('/api/tasks', verifyToken, (req, res) => {
     });
 });
 
-
 // POST: Mark a task as done
 app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
     const taskId = Number(req.params.taskId);
@@ -284,7 +283,7 @@ app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
 
         let task = results[0];
 
-        // Parse assigned sequence from text format
+        // Parse assigned sequence
         let assignedSequence = task.assigned_sequence.split(',').map(Number);
         
         if (!Array.isArray(assignedSequence) || assignedSequence.length === 0) {
@@ -304,116 +303,50 @@ app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
         completedBy.push(userId);
         const updatedCompletedBy = JSON.stringify(completedBy);
 
-        if (currentIndex + 1 < assignedSequence.length) {
-            // Move to the next user
-            let nextUserId = assignedSequence[currentIndex + 1];
+        // Determine the new status
+        let newStatus = task.status;
 
+        // If the first user marks done, change status to "in progress"
+        if (currentIndex === 0 && task.status === 'pending') {
+            newStatus = 'in progress';
+        }
+
+        // If the last user marks done, change status to "done"
+        if (currentIndex === assignedSequence.length - 1) {
+            newStatus = 'done';
+        }
+
+        if (newStatus === 'done') {
+            // If the last user has completed, mark task as "done"
             db.query(
-                'UPDATE tasks SET assigned_to_user_id = ?, current_index = ?, completed_by = ? WHERE id = ?',
-                [nextUserId, currentIndex + 1, updatedCompletedBy, taskId],
-                (updateErr) => {
-                    if (updateErr) {
-                        console.error('Error updating task:', updateErr);
-                        return res.status(500).json({ error: 'Internal Server Error' });
-                    }
-                    res.json({ message: `Task reassigned to User ${nextUserId}` });
-                }
-            );
-        } else {
-            // If last user has completed, mark task as done
-            db.query(
-                'UPDATE tasks SET status = "done", completed_by = ? WHERE id = ?',
-                [updatedCompletedBy, taskId],
+                'UPDATE tasks SET status = ?, completed_by = ? WHERE id = ?',
+                [newStatus, updatedCompletedBy, taskId],
                 (updateErr) => {
                     if (updateErr) {
                         console.error('Error updating task status:', updateErr);
                         return res.status(500).json({ error: 'Internal Server Error' });
                     }
-                    res.json({ message: 'Task completed' });
+                    res.json({ message: 'Task completed', status: 'done' });
+                }
+            );
+        } else {
+            // Otherwise, move to the next user
+            let nextUserId = assignedSequence[currentIndex + 1];
+
+            db.query(
+                'UPDATE tasks SET assigned_to_user_id = ?, current_index = ?, completed_by = ?, status = ? WHERE id = ?',
+                [nextUserId, currentIndex + 1, updatedCompletedBy, newStatus, taskId],
+                (updateErr) => {
+                    if (updateErr) {
+                        console.error('Error updating task:', updateErr);
+                        return res.status(500).json({ error: 'Internal Server Error' });
+                    }
+                    res.json({ message: `Task reassigned to User ${nextUserId}`, status: newStatus });
                 }
             );
         }
     });
 });
-
-
- // POST: Mark a task as done
-/*app.post('/api/tasks/:taskId/done', verifyToken, (req, res) => {
-    const taskId = Number(req.params.taskId);
-    const userId = req.user.id;
-
-    if (isNaN(taskId)) {    
-        return res.status(400).json({ error: 'Invalid Task ID' });
-    }
-
-    // Fetch task details
-    db.query('SELECT * FROM tasks WHERE id = ?', [taskId], (err, results) => {
-        if (err) {
-            console.error('Error fetching task:', err);
-            return res.status(500).json({ error: 'Internal Server Error' });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-
-        let task = results[0];
-
-        // Parse assigned sequence
-        let assignedSequence;
-        try {
-            assignedSequence = JSON.parse(task.assigned_sequence);
-            if (!Array.isArray(assignedSequence) || assignedSequence.length === 0) {
-                throw new Error('assigned_sequence is not a valid array');
-            }
-        } catch (error) {
-            console.error('Invalid assigned_sequence format:', error);
-            return res.status(500).json({ error: 'Invalid assigned_sequence format' });
-        }
-
-        let currentIndex = Number(task.current_index) || 0;
-        let completedBy = JSON.parse(task.completed_by || '[]');
-
-        // Check if user has already marked it as done
-        if (completedBy.includes(userId)) {
-            return res.status(400).json({ error: 'You have already marked this task as done' });
-        }
-
-        // Add user to completed list
-        completedBy.push(userId);
-        const updatedCompletedBy = JSON.stringify(completedBy);
-
-        if (currentIndex + 1 < assignedSequence.length) {
-            // Move to the next user
-            let nextUserId = Number(assignedSequence[currentIndex + 1]);
-
-            db.query(
-                'UPDATE tasks SET assigned_to_user_id = ?, current_index = ?, completed_by = ? WHERE id = ?',
-                [nextUserId, currentIndex + 1, updatedCompletedBy, taskId],
-                (updateErr) => {
-                    if (updateErr) {
-                        console.error('Error updating task:', updateErr);
-                        return res.status(500).json({ error: 'Internal Server Error' });
-                    }
-                    res.json({ message: `Task reassigned to User ${nextUserId}` });
-                }
-            );
-        } else {
-            // If last user has completed, mark task as done
-            db.query(
-                'UPDATE tasks SET status = "done", completed_by = ? WHERE id = ?',
-                [updatedCompletedBy, taskId],
-                (updateErr) => {
-                    if (updateErr) {
-                        console.error('Error updating task status:', updateErr);
-                        return res.status(500).json({ error: 'Internal Server Error' });
-                    }
-                    res.json({ message: 'Task completed' });
-                }
-            );
-        }
-    });
-});*/
 
 
 // GET: Fetch tasks for a specific user (using user_id and email)
